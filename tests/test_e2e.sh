@@ -30,10 +30,11 @@ trap cleanup EXIT
 check() {
   local label="$1"
   shift
-  if "$@" >/dev/null 2>&1; then
+  if "$@" >"$WORK/check.log" 2>&1; then
     echo "ok   $label"
   else
     echo "FAIL $label"
+    sed 's/^/       /' "$WORK/check.log" | tail -n 15
     failures=$(( failures + 1 ))
   fi
 }
@@ -91,7 +92,7 @@ CHAT_MODEL=test-chat
 EMBED_MODEL=test-embed
 CONTEXT_LENGTH=8192
 PORT=$WEB_PORT
-BIND_ADDRESS=127.0.0.1
+BIND_ADDRESS=0.0.0.0
 WEBUI_SECRET_KEY=$(openssl rand -hex 32)
 EOF
 printf '# Office handbook\n\nThe Zanzibar office opens at 09:15 on weekdays.\n' > "$DOCS/handbook.md"
@@ -109,7 +110,9 @@ sleep 1
 
 # --- Act and assert -----------------------------------------------------------
 check "starts"                         "$APP/privatellm" start
+check "closed to network before setup" grep -q "Other devices are blocked" <("$APP/privatellm" status)
 check "configure creates everything"   "$APP/privatellm" configure
+check "open to network after setup"    grep -q "From other devices" <("$APP/privatellm" status)
 check "configure can be run again"     "$APP/privatellm" configure
 check "api key file is private"        test "$(stat -c %a "$APP/run/api-key" 2>/dev/null || stat -f %Lp "$APP/run/api-key")" = "600"
 
@@ -126,6 +129,10 @@ model_prompt 'When does the Zanzibar office open?' >"$WORK/prompt.txt"
 check "document text reaches model"    grep -q "09:15" "$WORK/prompt.txt"
 check "system prompt reaches model"    grep -q "private assistant for this team" "$WORK/prompt.txt"
 
+echo 999999 > "$APP/run/ollama.pid"   # a leftover pidfile, as after a reboot
+check "stale pidfile is ignored"       "$APP/privatellm" start
+check "stale pidfile is removed"       test ! -e "$APP/run/ollama.pid"
+check "data folder is private"         test "$(stat -c %a "$APP/data" 2>/dev/null || stat -f %Lp "$APP/data")" = "700"
 check "restart works"                  "$APP/privatellm" restart
 check "still answers after restart"    test "$(top_source 'When does the Zanzibar office open?')" = "handbook.md"
 
@@ -145,5 +152,10 @@ check "approved user gets an answer"   test "$(colleague_ask_status)" = "200"
 check "their answer uses the document" grep -q "09:15" "$WORK/colleague.json"
 
 echo
-if (( failures == 0 )); then echo "All checks passed."; else echo "$failures check(s) failed. Logs: $APP/logs"; trap - EXIT; fi
+if (( failures == 0 )); then
+  echo "All checks passed."
+else
+  echo "$failures check(s) failed. Last lines of the server log:"
+  tail -n 20 "$APP/logs/webui.log" | cut -c1-300
+fi
 exit "$failures"

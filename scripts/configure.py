@@ -25,6 +25,8 @@ KNOWLEDGE_NAME = "Company Knowledge"
 ASSISTANT_ID = "assistant"
 ASSISTANT_NAME = "Assistant"
 REQUEST_TIMEOUT_SECONDS = 60
+# The server is on this machine: never route these calls through a system proxy.
+LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 EVERYONE_CAN_READ = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
 
 SYSTEM_PROMPT = """You are the private assistant for this team. You run entirely on the team's own computer.
@@ -58,7 +60,7 @@ class Api:
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(self.base_url + path, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with LOCAL_OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 return json.loads(response.read() or b"null")
         except urllib.error.HTTPError as error:
             raise ApiError(error.code, error.read().decode(errors="replace")) from error
@@ -82,6 +84,8 @@ def sign_in_or_create_admin(api: Api, name: str, email: str, password: str) -> s
         result = api.request("POST", "/api/v1/auths/signin", {"email": email, "password": password})
         print(f"Signed in as {email}.")
     except ApiError as signin_error:
+        if signin_error.status not in (400, 401):
+            raise
         try:
             result = api.request("POST", "/api/v1/auths/signup", {"name": name, "email": email, "password": password})
         except ApiError as signup_error:
@@ -101,7 +105,7 @@ def ensure_knowledge_base(api: Api) -> dict[str, Any]:
             print(f"Knowledge base '{existing['name']}' already exists.")
             return existing
         except ApiError as error:
-            if error.status not in (401, 404):
+            if error.status != 404:
                 raise
     created = api.request(
         "POST",
@@ -123,7 +127,8 @@ def save_model(api: Api, form: dict[str, Any]) -> bool:
         api.request("POST", "/api/v1/models/create", form)
         return True
     except ApiError as error:
-        if error.status not in (400, 401, 409):
+        # Open WebUI 0.13 reports a taken model id as 401, so go by the message.
+        if "already registered" not in error.detail:
             raise
         api.request("POST", "/api/v1/models/model/update", form)
         return False
@@ -177,12 +182,13 @@ def ensure_assistant(api: Api, knowledge: dict[str, Any], chat_model: str) -> No
 
 
 def ensure_api_key(api: Api) -> None:
-    if API_KEY_FILE.exists():
+    if API_KEY_FILE.exists() and API_KEY_FILE.stat().st_size > 0:
         print("Sync API key already saved.")
         return
     key = api.request("POST", "/api/v1/auths/api_key")["api_key"]
-    API_KEY_FILE.touch(mode=0o600)
-    API_KEY_FILE.write_text(key + "\n")
+    descriptor = os.open(API_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w") as handle:
+        handle.write(key + "\n")
     print("Saved an API key for ./privatellm sync.")
 
 
@@ -207,5 +213,7 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except ApiError as error:
+        sys.exit(f"The assistant refused a request: {error}")
     except KeyboardInterrupt:
         sys.exit(130)

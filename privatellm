@@ -22,23 +22,39 @@ load_settings() {
   # shellcheck disable=SC1091
   source "$ROOT/config/openwebui.env"
   set +a
+  # uv and Homebrew install here; a fresh Mac shell does not have them on PATH.
+  export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+  # Chats, password hashes and logs: readable by this macOS user only.
+  umask 077
   mkdir -p "$RUN_DIR" "$LOG_DIR" "$DATA_DIR"
+  chmod 700 "$RUN_DIR" "$LOG_DIR" "$DATA_DIR"
 }
 
 is_up() { curl -fs -o /dev/null --max-time 3 "$1" 2>/dev/null; }
 
+# wait_for <url> <display name> <pidfile name>
 wait_for() {
-  local url="$1" name="$2" waited=0
+  local url="$1" name="$2" pid_name="$3" waited=0
   until is_up "$url"; do
+    pid_alive "$pid_name" || fail "$name stopped right after starting. See $LOG_DIR/$pid_name.log."
     (( waited >= START_TIMEOUT_SECONDS )) && fail "$name did not start. See $LOG_DIR."
     sleep 2
     waited=$(( waited + 2 ))
   done
 }
 
+# True if the pidfile names a live process that really is ours. After a reboot
+# the saved number can belong to an unrelated program, which must not be killed.
 pid_alive() {
-  local file="$RUN_DIR/$1.pid"
-  [[ -f "$file" ]] && kill -0 "$(cat "$file")" 2>/dev/null
+  local file="$RUN_DIR/$1.pid" pid expected="$1"
+  [[ -f "$file" ]] || return 1
+  pid="$(cat "$file")"
+  [[ "$expected" == "webui" ]] && expected="open-webui"
+  if kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o command= 2>/dev/null | grep -q "$expected"; then
+    return 0
+  fi
+  rm -f "$file"
+  return 1
 }
 
 start_ollama() {
@@ -57,7 +73,19 @@ start_ollama() {
   OLLAMA_KEEP_ALIVE=30m \
     nohup ollama serve >"$LOG_DIR/ollama.log" 2>&1 &
   echo $! >"$RUN_DIR/ollama.pid"
-  wait_for "$OLLAMA_URL/api/version" "Ollama"
+  wait_for "$OLLAMA_URL/api/version" "Ollama" ollama
+}
+
+configured() { [[ -s "$RUN_DIR/api-key" ]]; }
+
+# Until the admin account exists, anyone who can reach the site could claim it,
+# so stay private to this Mac until ./privatellm configure has run.
+listen_address() {
+  if configured; then echo "$BIND_ADDRESS"; else echo "127.0.0.1"; fi
+}
+
+network_name() {
+  if command -v scutil >/dev/null 2>&1; then echo "$(scutil --get LocalHostName).local"; else hostname; fi
 }
 
 start_webui() {
@@ -70,9 +98,9 @@ start_webui() {
   OLLAMA_BASE_URL="$OLLAMA_URL" \
   RAG_OLLAMA_BASE_URL="$OLLAMA_URL" \
   RAG_EMBEDDING_MODEL="$EMBED_MODEL" \
-    nohup open-webui serve --host "$BIND_ADDRESS" --port "$PORT" >"$LOG_DIR/webui.log" 2>&1 &
+    nohup open-webui serve --host "$(listen_address)" --port "$PORT" >"$LOG_DIR/webui.log" 2>&1 &
   echo $! >"$RUN_DIR/webui.pid"
-  wait_for "http://127.0.0.1:$PORT/health" "Open WebUI"
+  wait_for "http://127.0.0.1:$PORT/health" "Open WebUI" webui
 }
 
 stop_one() {
@@ -100,7 +128,11 @@ show_status() {
   if is_up "http://127.0.0.1:$PORT/health"; then
     echo "Open WebUI: running"
     echo "  On this Mac:        http://localhost:$PORT"
-    [[ "$BIND_ADDRESS" == "0.0.0.0" ]] && echo "  From other devices: http://$(hostname):$PORT"
+    if ! configured; then
+      echo "  Other devices are blocked until you run ./privatellm configure."
+    elif [[ "$BIND_ADDRESS" == "0.0.0.0" ]]; then
+      echo "  From other devices: http://$(network_name):$PORT"
+    fi
   else
     echo "Open WebUI: stopped"
   fi
@@ -121,6 +153,18 @@ run_sync() {
   ( cd "$work" && OPEN_WEBUI_URL="http://127.0.0.1:$PORT" OPEN_WEBUI_API_KEY="$(cat "$key_file")" oikb sync "$@" )
 }
 
+run_configure() {
+  local was_configured=no
+  configured && was_configured=yes
+  WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/configure.py" "$@"
+  if [[ "$was_configured" == "no" && "$BIND_ADDRESS" != "127.0.0.1" ]] && configured; then
+    echo "Restarting so other devices on your network can connect..."
+    stop_one webui
+    start_webui
+    show_status
+  fi
+}
+
 main() {
   local command="${1:-status}"
   shift || true
@@ -131,7 +175,7 @@ main() {
     stop)         stop_one webui; stop_one ollama ;;
     restart)      stop_one webui; stop_one ollama; start_ollama; start_webui; show_status ;;
     status)       show_status ;;
-    configure)    WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/configure.py" "$@" ;;
+    configure)    run_configure "$@" ;;
     sync)         run_sync "$@" ;;
     logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
     *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, logs." ;;

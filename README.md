@@ -45,6 +45,10 @@ On the Mac that will host it ([Homebrew](https://brew.sh) must be installed):
 `./privatellm status` prints the address. Open it, log in, and chat with
 **Assistant**.
 
+Until `configure` has created your admin login, the site is reachable from the
+host Mac only. That stops someone else on the network claiming the admin
+account first.
+
 ## Add your documents
 
 ```bash

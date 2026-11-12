@@ -12,7 +12,8 @@ defaults:
     max-size: 50mb
 
 sources:
-  # A folder on this Mac. Subfolders are included.
+  # A folder on this Mac. Subfolders are included. Use the full path,
+  # starting with /Users/... (not ~ or a relative path).
   - name: documents
     source: /Users/you/Documents/Company
     kb-id: __KNOWLEDGE_ID__
