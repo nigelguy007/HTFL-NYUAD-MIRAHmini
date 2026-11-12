@@ -1,0 +1,8 @@
+# Local state: secrets, chats, indexed documents, logs.
+settings.env
+data/
+run/
+logs/
+sync/sources.yaml
+sync/credentials.env
+__pycache__/

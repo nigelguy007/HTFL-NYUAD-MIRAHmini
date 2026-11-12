@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Runs the private assistant: Ollama (the model) and Open WebUI (the chat site).
+#   ./privatellm start | stop | restart | status | configure | sync | logs
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SETTINGS="$ROOT/settings.env"
+RUN_DIR="$ROOT/run"
+LOG_DIR="$ROOT/logs"
+DATA_DIR="$ROOT/data"
+OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
+START_TIMEOUT_SECONDS=180
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+load_settings() {
+  [[ -f "$SETTINGS" ]] || fail "settings.env not found. Run ./setup.sh first."
+  set -a
+  # shellcheck disable=SC1090
+  source "$SETTINGS"
+  # shellcheck disable=SC1091
+  source "$ROOT/config/openwebui.env"
+  set +a
+  mkdir -p "$RUN_DIR" "$LOG_DIR" "$DATA_DIR"
+}
+
+is_up() { curl -fsS -o /dev/null --max-time 3 "$1"; }
+
+wait_for() {
+  local url="$1" name="$2" waited=0
+  until is_up "$url"; do
+    (( waited >= START_TIMEOUT_SECONDS )) && fail "$name did not start. See $LOG_DIR."
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+}
+
+pid_alive() {
+  local file="$RUN_DIR/$1.pid"
+  [[ -f "$file" ]] && kill -0 "$(cat "$file")" 2>/dev/null
+}
+
+start_ollama() {
+  if is_up "$OLLAMA_URL/api/version"; then
+    if ! pid_alive ollama; then
+      echo "Ollama is already running outside this script (for example the Ollama app)."
+      echo "  Its context length is whatever that app is set to, not CONTEXT_LENGTH."
+      echo "  Quit it and run this again to let this script manage it."
+    fi
+    return
+  fi
+  # 127.0.0.1: only Open WebUI on this machine may talk to the model directly.
+  OLLAMA_HOST="${OLLAMA_URL#http://}" \
+  OLLAMA_NO_CLOUD=1 \
+  OLLAMA_CONTEXT_LENGTH="$CONTEXT_LENGTH" \
+  OLLAMA_KEEP_ALIVE=30m \
+    nohup ollama serve >"$LOG_DIR/ollama.log" 2>&1 &
+  echo $! >"$RUN_DIR/ollama.pid"
+  wait_for "$OLLAMA_URL/api/version" "Ollama"
+}
+
+start_webui() {
+  if pid_alive webui; then
+    echo "Open WebUI is already running."
+    return
+  fi
+  is_up "http://127.0.0.1:$PORT/health" && fail "Something else is already using port $PORT. Change PORT in settings.env."
+  DATA_DIR="$DATA_DIR" \
+  OLLAMA_BASE_URL="$OLLAMA_URL" \
+  RAG_OLLAMA_BASE_URL="$OLLAMA_URL" \
+  RAG_EMBEDDING_MODEL="$EMBED_MODEL" \
+    nohup open-webui serve --host "$BIND_ADDRESS" --port "$PORT" >"$LOG_DIR/webui.log" 2>&1 &
+  echo $! >"$RUN_DIR/webui.pid"
+  wait_for "http://127.0.0.1:$PORT/health" "Open WebUI"
+}
+
+stop_one() {
+  local name="$1" file="$RUN_DIR/$1.pid"
+  if pid_alive "$name"; then
+    kill "$(cat "$file")"
+    echo "Stopped $name."
+  fi
+  rm -f "$file"
+}
+
+show_status() {
+  if is_up "$OLLAMA_URL/api/version"; then echo "Ollama:     running"; else echo "Ollama:     stopped"; fi
+  if is_up "http://127.0.0.1:$PORT/health"; then
+    echo "Open WebUI: running"
+    echo "  On this Mac:        http://localhost:$PORT"
+    [[ "$BIND_ADDRESS" == "0.0.0.0" ]] && echo "  From other devices: http://$(hostname):$PORT"
+  else
+    echo "Open WebUI: stopped"
+  fi
+  echo "Model: $CHAT_MODEL (context $CONTEXT_LENGTH tokens)"
+}
+
+run_sync() {
+  local key_file="$ROOT/run/api-key" sources="$ROOT/sync/sources.yaml"
+  [[ -f "$key_file" ]] || fail "No API key yet. Run ./privatellm configure first."
+  [[ -f "$sources" ]] || fail "Copy sync/sources.example.yaml to sync/sources.yaml and edit it first."
+  [[ -f "$ROOT/sync/credentials.env" ]] && { set -a; source "$ROOT/sync/credentials.env"; set +a; }
+  local kb_id
+  kb_id="$(cat "$ROOT/run/knowledge-id")"
+  # oikb reads .oikb.yaml from the current directory.
+  local work="$RUN_DIR/sync"
+  mkdir -p "$work"
+  sed "s/__KNOWLEDGE_ID__/$kb_id/g" "$sources" >"$work/.oikb.yaml"
+  ( cd "$work" && OPEN_WEBUI_URL="http://127.0.0.1:$PORT" OPEN_WEBUI_API_KEY="$(cat "$key_file")" oikb sync "$@" )
+}
+
+main() {
+  local command="${1:-status}"
+  shift || true
+  load_settings
+  case "$command" in
+    start)        start_ollama; start_webui; show_status ;;
+    start-ollama) start_ollama ;;
+    stop)         stop_one webui; stop_one ollama ;;
+    restart)      stop_one webui; stop_one ollama; start_ollama; start_webui; show_status ;;
+    status)       show_status ;;
+    configure)    WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/configure.py" "$@" ;;
+    sync)         run_sync "$@" ;;
+    logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
+    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, logs." ;;
+  esac
+}
+
+main "$@"

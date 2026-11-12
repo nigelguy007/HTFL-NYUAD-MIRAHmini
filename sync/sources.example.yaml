@@ -1,0 +1,47 @@
+# Where the assistant's knowledge comes from.
+# Copy this file to sources.yaml, keep the entries you need, delete the rest,
+# then run:  ./privatellm sync
+#
+# Every run copies only what is new or changed, and removes what was deleted.
+# __KNOWLEDGE_ID__ is filled in for you. Passwords and tokens go in
+# sync/credentials.env (never in this file).
+
+defaults:
+  concurrency: 2
+  filter:
+    max-size: 50mb
+
+sources:
+  # A folder on this Mac. Subfolders are included.
+  - name: documents
+    source: /Users/you/Documents/Company
+    kb-id: __KNOWLEDGE_ID__
+    filter:
+      include: ["**/*.pdf", "**/*.docx", "**/*.pptx", "**/*.xlsx", "**/*.csv", "**/*.md", "**/*.txt"]
+
+  # Google Drive folder. The ID is the last part of the folder's web address.
+  # Needs GOOGLE_APPLICATION_CREDENTIALS in credentials.env.
+  - name: google-drive
+    source: gdrive:YOUR_FOLDER_ID
+    kb-id: __KNOWLEDGE_ID__
+
+  # Dropbox folder. Needs DROPBOX_TOKEN.
+  - name: dropbox
+    source: dropbox:/Company
+    kb-id: __KNOWLEDGE_ID__
+
+  # SharePoint site. Needs SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID,
+  # SHAREPOINT_CLIENT_SECRET.
+  - name: sharepoint
+    source: sharepoint:YourSite/Documents
+    kb-id: __KNOWLEDGE_ID__
+
+  # A website. Pages are found through its sitemap and links.
+  - name: website
+    source: web:https://www.example.com
+    kb-id: __KNOWLEDGE_ID__
+
+  # A Notion workspace or page. Needs NOTION_TOKEN.
+  - name: notion
+    source: notion:ROOT_PAGE_ID
+    kb-id: __KNOWLEDGE_ID__
