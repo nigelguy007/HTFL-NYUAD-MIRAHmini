@@ -39,10 +39,20 @@ def model_entry(name):
     }
 
 
+def search_queries_reply(prompt):
+    """Answer Open WebUI's "write search queries" task with the user's last question."""
+    questions = re.findall(r"^USER: (.+)$", prompt, flags=re.MULTILINE)
+    return json.dumps({"queries": questions[-1:]})
+
+
 def echo_reply(body):
     """Repeat the prompt back so tests can see what reached the model."""
+    messages = body.get("messages", [])
+    last = messages[-1].get("content") if messages else ""
+    if isinstance(last, str) and '"queries"' in last and "<chat_history>" in last:
+        return search_queries_reply(last)
     parts = []
-    for message in body.get("messages", []):
+    for message in messages:
         content = message.get("content")
         if isinstance(content, list):
             content = " ".join(str(part.get("text", "")) for part in content if isinstance(part, dict))

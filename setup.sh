@@ -6,7 +6,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETTINGS="$ROOT/settings.env"
-OPEN_WEBUI_VERSION="${OPEN_WEBUI_VERSION:-}"   # empty = latest; set to pin
+# The versions tests/test_e2e.sh was run against. Newer ones may rename settings.
+OPEN_WEBUI_VERSION="${OPEN_WEBUI_VERSION:-0.13.3}"
+OIKB_VERSION="${OIKB_VERSION:-0.6.0}"
 EMBED_MODEL_DEFAULT="qwen3-embedding:0.6b"
 
 say()  { printf '\n==> %s\n' "$*"; }
@@ -44,11 +46,9 @@ install_tools() {
     if command -v brew >/dev/null 2>&1; then brew install uv; else fail "Install uv first: https://docs.astral.sh/uv/"; fi
   fi
   say "Installing Open WebUI (several GB of downloads the first time)"
-  local package="open-webui"
-  [[ -n "$OPEN_WEBUI_VERSION" ]] && package="open-webui==$OPEN_WEBUI_VERSION"
-  uv tool install --python 3.12 "$package"
+  uv tool install --python 3.12 "open-webui==$OPEN_WEBUI_VERSION"
   say "Installing the knowledge sync tool"
-  uv tool install --python 3.12 'oikb[all]'
+  uv tool install --python 3.12 "oikb[all]==$OIKB_VERSION"
 }
 
 write_settings() {

@@ -10,6 +10,7 @@ LOG_DIR="$ROOT/logs"
 DATA_DIR="$ROOT/data"
 OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
 START_TIMEOUT_SECONDS=180
+STOP_TIMEOUT_SECONDS=30
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -24,7 +25,7 @@ load_settings() {
   mkdir -p "$RUN_DIR" "$LOG_DIR" "$DATA_DIR"
 }
 
-is_up() { curl -fsS -o /dev/null --max-time 3 "$1"; }
+is_up() { curl -fs -o /dev/null --max-time 3 "$1" 2>/dev/null; }
 
 wait_for() {
   local url="$1" name="$2" waited=0
@@ -77,7 +78,18 @@ start_webui() {
 stop_one() {
   local name="$1" file="$RUN_DIR/$1.pid"
   if pid_alive "$name"; then
-    kill "$(cat "$file")"
+    local pid waited=0
+    pid="$(cat "$file")"
+    kill "$pid"
+    # Wait for it to exit, so a restart does not find the port still taken.
+    while kill -0 "$pid" 2>/dev/null; do
+      if (( waited >= STOP_TIMEOUT_SECONDS )); then
+        kill -9 "$pid" 2>/dev/null || true
+        break
+      fi
+      sleep 1
+      waited=$(( waited + 1 ))
+    done
     echo "Stopped $name."
   fi
   rm -f "$file"
