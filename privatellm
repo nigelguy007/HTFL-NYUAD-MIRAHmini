@@ -22,6 +22,8 @@ load_settings() {
   # shellcheck disable=SC1091
   source "$ROOT/config/openwebui.env"
   set +a
+  # Model files live with the project, so they are on whichever drive it is on.
+  MODELS_DIR="${MODELS_DIR:-$ROOT/models}"
   # uv and Homebrew install here; a fresh Mac shell does not have them on PATH.
   export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
   # Chats, password hashes and logs: readable by this macOS user only.
@@ -61,13 +63,16 @@ start_ollama() {
   if is_up "$OLLAMA_URL/api/version"; then
     if ! pid_alive ollama; then
       echo "Ollama is already running outside this script (for example the Ollama app)."
-      echo "  Its context length is whatever that app is set to, not CONTEXT_LENGTH."
+      echo "  Its context length is whatever that app is set to, not CONTEXT_LENGTH,"
+      echo "  and it keeps models in its own folder on the Mac's disk, not $MODELS_DIR."
       echo "  Quit it and run this again to let this script manage it."
     fi
     return
   fi
+  mkdir -p "$MODELS_DIR" 2>/dev/null || fail "Cannot use $MODELS_DIR for models. Is the drive plugged in?"
   # 127.0.0.1: only Open WebUI on this machine may talk to the model directly.
   OLLAMA_HOST="${OLLAMA_URL#http://}" \
+  OLLAMA_MODELS="$MODELS_DIR" \
   OLLAMA_NO_CLOUD=1 \
   OLLAMA_CONTEXT_LENGTH="$CONTEXT_LENGTH" \
   OLLAMA_KEEP_ALIVE=30m \
@@ -136,7 +141,7 @@ show_status() {
   else
     echo "Open WebUI: stopped"
   fi
-  echo "Model: $CHAT_MODEL (context $CONTEXT_LENGTH tokens)"
+  echo "Model: $CHAT_MODEL (context $CONTEXT_LENGTH tokens), stored in $MODELS_DIR"
 }
 
 run_sync() {

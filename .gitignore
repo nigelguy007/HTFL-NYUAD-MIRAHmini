@@ -3,6 +3,7 @@ settings.env
 data/
 run/
 logs/
+models/
 sync/sources.yaml
 sync/credentials.env
 __pycache__/

@@ -63,6 +63,9 @@ write_settings() {
 CHAT_MODEL=$chat_model
 EMBED_MODEL=$EMBED_MODEL_DEFAULT
 CONTEXT_LENGTH=$context
+# Where the model files (5 to 25 GB) are kept. Default: the models folder next
+# to this file, so they sit on whichever drive this project is on.
+# MODELS_DIR=/Volumes/YourDrive/models
 # Port people open in their browser.
 PORT=8080
 # 0.0.0.0 lets other computers on your network connect. 127.0.0.1 = this Mac only.
@@ -77,6 +80,8 @@ pull_models() {
   # shellcheck disable=SC1090
   source "$SETTINGS"
   "$ROOT/privatellm" start-ollama
+  # Only an Ollama started by the launcher stores models in the project folder.
+  [[ -f "$ROOT/run/ollama.pid" ]] || fail "Another Ollama is already running. Quit the Ollama app (menu bar icon, Quit), then run ./setup.sh again."
   say "Downloading $CHAT_MODEL and $EMBED_MODEL (this is the slow part)"
   ollama pull "$CHAT_MODEL"
   ollama pull "$EMBED_MODEL"

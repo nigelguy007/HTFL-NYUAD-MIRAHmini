@@ -93,6 +93,10 @@ again, and set the Mac not to sleep (System Settings, Energy).
 
 ## Changing things
 
+- **Where the model is stored:** in the `models` folder inside this project, so
+  it is on whichever drive you installed to. If that is an external drive, keep
+  it plugged in while the assistant runs. To put it elsewhere, set `MODELS_DIR`
+  in `settings.env`.
 - **Model, port, context size:** `settings.env`, then `./privatellm restart`.
   After changing `CHAT_MODEL`, run `ollama pull <model>` and
   `./privatellm configure`.
