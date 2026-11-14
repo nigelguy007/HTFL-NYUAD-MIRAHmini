@@ -86,7 +86,7 @@ approve_colleague() {
 
 # --- Arrange: a private copy of the project, test documents, the stand-in ----
 mkdir -p "$APP" "$DOCS/policies"
-cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$SOURCE_ROOT/sync" "$APP/"
+cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$SOURCE_ROOT/sync" "$SOURCE_ROOT/branding" "$APP/"
 cat > "$APP/settings.env" <<EOF
 CHAT_MODEL=test-chat
 EMBED_MODEL=test-embed
@@ -135,6 +135,16 @@ check "stale pidfile is removed"       test ! -e "$APP/run/ollama.pid"
 check "data folder is private"         test "$(stat -c %a "$APP/data" 2>/dev/null || stat -f %Lp "$APP/data")" = "700"
 check "restart works"                  "$APP/privatellm" restart
 check "still answers after restart"    test "$(top_source 'When does the Zanzibar office open?')" = "handbook.md"
+
+curl -fsS -o "$WORK/served-logo.png" "$BASE/static/favicon.png"
+check "brand logo is served"           cmp "$WORK/served-logo.png" "$APP/branding/static/favicon.png"
+check "brand colours are served"       grep -qi "161a24" <(curl -fsS "$BASE/static/custom.css")
+check "brand name is shown"            grep -q "Hack the Future Lab" <(curl -fsS "$BASE/api/config")
+mv "$APP/branding" "$APP/branding-off"
+"$APP/privatellm" restart >/dev/null 2>&1 || true
+check "removing branding restores it"  test "$(curl -fsS "$BASE/static/custom.css" | wc -c | tr -d ' ')" = "0"
+mv "$APP/branding-off" "$APP/branding"
+"$APP/privatellm" restart >/dev/null 2>&1 || true
 
 check "web search is off"              test "$(setting enable_web_search)" = "False"
 check "community sharing is off"       test "$(setting enable_community_sharing)" = "False"

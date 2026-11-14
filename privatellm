@@ -8,6 +8,7 @@ SETTINGS="$ROOT/settings.env"
 RUN_DIR="$ROOT/run"
 LOG_DIR="$ROOT/logs"
 DATA_DIR="$ROOT/data"
+BRAND_DIR="$ROOT/branding"
 OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
 START_TIMEOUT_SECONDS=180
 STOP_TIMEOUT_SECONDS=30
@@ -21,6 +22,10 @@ load_settings() {
   source "$SETTINGS"
   # shellcheck disable=SC1091
   source "$ROOT/config/openwebui.env"
+  if [[ -f "$BRAND_DIR/brand.env" ]]; then
+    # shellcheck disable=SC1091
+    source "$BRAND_DIR/brand.env"
+  fi
   set +a
   # Model files live with the project, so they are on whichever drive it is on.
   MODELS_DIR="${MODELS_DIR:-$ROOT/models}"
@@ -94,12 +99,42 @@ network_name() {
   if command -v scutil >/dev/null 2>&1; then echo "$(scutil --get LocalHostName).local"; else hostname; fi
 }
 
+# Prints the folder the chat software loads its logo and stylesheet from.
+webui_static_dir() {
+  local program target static
+  program="$(command -v open-webui)" || return 1
+  target="$(readlink "$program")" || return 1
+  [[ "$target" == /* ]] || target="$(dirname "$program")/$target"
+  # <tool>/bin/open-webui  ->  <tool>/lib/python3.x/site-packages/open_webui/frontend/static
+  for static in "$(dirname "$(dirname "$target")")"/lib/python*/site-packages/open_webui/frontend/static; do
+    [[ -d "$static" ]] && { echo "$static"; return 0; }
+  done
+  return 1
+}
+
+# Puts the logo and colours from branding/static in place before each start.
+# The originals are saved once; removing the branding folder restores them.
+apply_branding() {
+  local static backup="$APPS_DIR/original-static"
+  static="$(webui_static_dir 2>/dev/null)" || { echo "Note: could not find the chat software's files, so branding was skipped."; return 0; }
+  if [[ -d "$BRAND_DIR/static" ]]; then
+    if [[ ! -d "$backup" ]]; then
+      mkdir -p "$APPS_DIR"
+      cp -R "$static" "$backup"
+    fi
+    cp -R "$BRAND_DIR/static/." "$static/"
+  elif [[ -d "$backup" ]]; then
+    cp -R "$backup/." "$static/"
+  fi
+}
+
 start_webui() {
   if pid_alive webui; then
     echo "Open WebUI is already running."
     return
   fi
   is_up "http://127.0.0.1:$PORT/health" && fail "Something else is already using port $PORT. Change PORT in settings.env."
+  apply_branding
   DATA_DIR="$DATA_DIR" \
   OLLAMA_BASE_URL="$OLLAMA_URL" \
   RAG_OLLAMA_BASE_URL="$OLLAMA_URL" \

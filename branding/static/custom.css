@@ -1,0 +1,45 @@
+/* Colours taken from https://www.nyuadhtfl.com/ (Hack the Future Lab).
+   The chat interface draws every surface, border and piece of text from one
+   grey scale, so recolouring that scale recolours the whole interface:
+   deep navy surfaces and warm cream text in dark mode, cream surfaces and
+   navy text in light mode. */
+html:root {
+  --color-gray-50: #faf7f1;
+  --color-gray-100: #f3eee4;   /* site text colour */
+  --color-gray-200: #e4ddd6;
+  --color-gray-300: #cdc6d6;
+  --color-gray-400: #aea6c4;
+  --color-gray-500: #8a81ad;
+  --color-gray-600: #6a5f99;   /* site button border */
+  --color-gray-700: #3d3554;
+  --color-gray-800: #30263f;   /* site primary */
+  --color-gray-850: #1f2230;
+  --color-gray-900: #161a24;   /* site background */
+  --color-gray-950: #05070b;   /* site theme colour */
+  /* Pure black and white become the site's deepest navy and a warm paper
+     white, so the login page and light mode carry the palette too. */
+  --color-black: #05070b;
+  --color-white: #fbf9f4;
+  --brand-accent: #b49cff;     /* site accent */
+  --brand-accent-on-light: #6a4fd6;
+}
+
+/* Lavender accent for links, selected text and keyboard focus. */
+::selection {
+  background: var(--brand-accent);
+  color: #161a24;
+}
+
+.prose a,
+.markdown-prose a {
+  color: var(--brand-accent-on-light);
+}
+
+.dark .prose a,
+.dark .markdown-prose a {
+  color: var(--brand-accent);
+}
+
+:focus-visible {
+  outline-color: var(--brand-accent);
+}

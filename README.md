@@ -107,6 +107,13 @@ again, and set the Mac not to sleep (System Settings, Energy).
   admin screens on every start, so a setting changed in the browser reverts on
   restart. That is deliberate: the privacy switches cannot be turned off by
   accident.
+- **Logo, colours and name:** the `branding` folder. Replace the image files in
+  `branding/static` with your own (same file names and sizes), edit the colours
+  in `branding/static/custom.css` and the name in `branding/brand.env`, then
+  `./privatellm restart`. To go back to the standard look, rename or delete the
+  `branding` folder and restart. The chat software's licence allows replacing
+  its logo and colours only while 50 or fewer people use this install in any
+  30 days.
 - **How the Assistant behaves:** the instructions in `scripts/configure.py`
   (`SYSTEM_PROMPT`), then `./privatellm configure`.
 
