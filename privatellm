@@ -24,8 +24,9 @@ load_settings() {
   set +a
   # Model files live with the project, so they are on whichever drive it is on.
   MODELS_DIR="${MODELS_DIR:-$ROOT/models}"
-  # uv and Homebrew install here; a fresh Mac shell does not have them on PATH.
-  export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+  # Use the programs setup.sh installed under this folder.
+  # shellcheck disable=SC1091
+  source "$ROOT/scripts/paths.sh"
   # Chats, password hashes and logs: readable by this macOS user only.
   umask 077
   mkdir -p "$RUN_DIR" "$LOG_DIR" "$DATA_DIR"

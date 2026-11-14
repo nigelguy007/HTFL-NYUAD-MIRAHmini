@@ -6,6 +6,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETTINGS="$ROOT/settings.env"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/paths.sh"
+OLLAMA_DOWNLOAD_URL="https://ollama.com/download/Ollama-darwin.zip"
+UV_INSTALLER_URL="https://astral.sh/uv/install.sh"
 # The versions tests/test_e2e.sh was run against. Newer ones may rename settings.
 OPEN_WEBUI_VERSION="${OPEN_WEBUI_VERSION:-0.13.3}"
 OIKB_VERSION="${OIKB_VERSION:-0.6.0}"
@@ -34,21 +38,44 @@ pick_model() {
   fi
 }
 
+# Ollama for Mac ships as an app; the command-line program is inside it.
+install_ollama() {
+  [[ -x "$BIN_DIR/ollama" ]] && return
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    command -v ollama >/dev/null 2>&1 || fail "Install Ollama first: https://ollama.com/download"
+    return
+  fi
+  say "Installing Ollama into $APPS_DIR"
+  local archive="$APPS_DIR/Ollama-darwin.zip"
+  curl --fail --show-error --location --progress-bar -o "$archive" "$OLLAMA_DOWNLOAD_URL"
+  unzip -q -o "$archive" -d "$APPS_DIR"
+  rm -f "$archive"
+  local program="$APPS_DIR/Ollama.app/Contents/Resources/ollama"
+  [[ -x "$program" ]] || fail "Ollama download did not contain the expected program ($program)."
+  ln -sf "$program" "$BIN_DIR/ollama"
+}
+
+install_uv() {
+  command -v uv >/dev/null 2>&1 && return
+  say "Installing uv (Python tool runner) into $BIN_DIR"
+  curl --fail --show-error --location --silent "$UV_INSTALLER_URL" \
+    | env UV_INSTALL_DIR="$BIN_DIR" UV_NO_MODIFY_PATH=1 sh
+  [[ -x "$BIN_DIR/uv" ]] || fail "uv did not install into $BIN_DIR."
+}
+
+# install_tool <package spec>: a Python program, isolated under $APPS_DIR.
+install_tool() {
+  uv tool install --python 3.12 "$1"
+}
+
 install_tools() {
-  if ! command -v ollama >/dev/null 2>&1; then
-    [[ "$(uname -s)" == "Darwin" ]] || fail "Install Ollama first: https://ollama.com/download"
-    command -v brew >/dev/null 2>&1 || fail "Homebrew is needed to install Ollama. Install it from https://brew.sh and run this again."
-    say "Installing Ollama"
-    brew install ollama
-  fi
-  if ! command -v uv >/dev/null 2>&1; then
-    say "Installing uv (Python tool runner)"
-    if command -v brew >/dev/null 2>&1; then brew install uv; else fail "Install uv first: https://docs.astral.sh/uv/"; fi
-  fi
+  mkdir -p "$APPS_DIR" "$BIN_DIR"
+  install_ollama
+  install_uv
   say "Installing Open WebUI (several GB of downloads the first time)"
-  uv tool install --python 3.12 "open-webui==$OPEN_WEBUI_VERSION"
+  install_tool "open-webui==$OPEN_WEBUI_VERSION"
   say "Installing the knowledge sync tool"
-  uv tool install --python 3.12 "oikb[all]==$OIKB_VERSION"
+  install_tool "oikb[all]==$OIKB_VERSION"
 }
 
 write_settings() {

@@ -32,7 +32,7 @@ export PATH="$WORK/bin:$PATH"
 make_app() {
   local app="$WORK/app-$1"
   mkdir -p "$app"
-  cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$app/"
+  cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$app/"
   printf 'CHAT_MODEL=test-chat\nEMBED_MODEL=test-embed\nCONTEXT_LENGTH=8192\nPORT=18081\nBIND_ADDRESS=127.0.0.1\nWEBUI_SECRET_KEY=x\n%s\n' "$2" > "$app/settings.env"
   echo "$app"
 }

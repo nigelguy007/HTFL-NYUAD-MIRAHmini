@@ -4,6 +4,8 @@ data/
 run/
 logs/
 models/
+apps/
+bin/
 sync/sources.yaml
 sync/credentials.env
 __pycache__/

@@ -34,7 +34,9 @@ This folder adds the setup, the privacy settings and the wiring between them.
 
 ## Set up
 
-On the Mac that will host it ([Homebrew](https://brew.sh) must be installed):
+On the Mac that will host it. Nothing needs installing first, and everything
+goes inside this folder, so put the folder on the drive you want it to live on
+(an external drive must be formatted APFS and stay plugged in):
 
 ```bash
 ./setup.sh               # installs everything, downloads the model (5 to 25 GB)
@@ -93,10 +95,11 @@ again, and set the Mac not to sleep (System Settings, Energy).
 
 ## Changing things
 
-- **Where the model is stored:** in the `models` folder inside this project, so
-  it is on whichever drive you installed to. If that is an external drive, keep
-  it plugged in while the assistant runs. To put it elsewhere, set `MODELS_DIR`
-  in `settings.env`.
+- **Where things are stored:** all inside this folder. `apps/` and `bin/` hold
+  the software, `models/` the model, `data/` your documents and chats. To keep
+  only the model somewhere else, set `MODELS_DIR` in `settings.env`. To remove
+  the assistant completely, stop it and delete this folder. Ollama also leaves
+  a small `~/.ollama` folder on the Mac (an identity key, a few KB).
 - **Model, port, context size:** `settings.env`, then `./privatellm restart`.
   After changing `CHAT_MODEL`, run `ollama pull <model>` and
   `./privatellm configure`.
