@@ -88,7 +88,11 @@ def import_one(api: Api, library_url: str, skill_path: str) -> str:
     words = len(text.split())
     if words > MAX_SKILL_WORDS:
         return f"skipped ({words} words; the limit is {MAX_SKILL_WORDS})"
-    return save_skill(api, parse_skill(skill_path, text))
+    try:
+        return save_skill(api, parse_skill(skill_path, text))
+    except ApiError as error:
+        # One refused skill (for example a name already taken) must not stop the rest.
+        return f"skipped (the assistant refused it: {error.detail})"
 
 
 def main() -> None:

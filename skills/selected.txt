@@ -8,20 +8,93 @@
 # to run commands, search the web or use connected apps do nothing on this
 # assistant, and skills over 900 words are skipped.
 
-# Questioning and framing
+# --- Questioning and framing ---------------------------------------------------
 mattpocock_skills/skills/productivity/grilling
 uploads_strategy-engagement-skills/skills/problem-framing-diagnosis
+uploads_21-strategy-skills/skills/situation-assessment
+uploads_21-strategy-skills/skills/assumption-audit
 phuryn_pm-skills/pm-product-discovery/skills/identify-assumptions-new
+phuryn_pm-skills/pm-product-discovery/skills/identify-assumptions-existing
+phuryn_pm-skills/pm-product-discovery/skills/prioritize-assumptions
 phuryn_pm-skills/pm-execution/skills/pre-mortem
 
-# Seeing patterns
+# --- Seeing patterns: markets, people, risks -----------------------------------
 phuryn_pm-skills/pm-product-strategy/skills/swot-analysis
 phuryn_pm-skills/pm-product-strategy/skills/pestle-analysis
+phuryn_pm-skills/pm-product-strategy/skills/ansoff-matrix
 phuryn_pm-skills/pm-execution/skills/stakeholder-map
+phuryn_pm-skills/pm-market-research/skills/market-segments
+phuryn_pm-skills/pm-market-research/skills/user-personas
+uploads_21-strategy-skills/skills/market-mapping
+uploads_21-strategy-skills/skills/customer-segmentation
+uploads_21-strategy-skills/skills/competitive-intel
+uploads_21-strategy-skills/skills/profit-pool-analysis
+uploads_strategy-engagement-skills/skills/market-competitive-intelligence
+anthropics_knowledge-work-plugins/operations/skills/risk-assessment
+uploads_21-strategy-skills/skills/risk-mitigation
 
-# Turning ideas into next steps
-phuryn_pm-skills/pm-product-discovery/skills/brainstorm-ideas-new
+# --- Strategy and options ------------------------------------------------------
 uploads_strategy-engagement-skills/skills/strategic-option-design
+uploads_21-strategy-skills/skills/strategic-options
+uploads_21-strategy-skills/skills/portfolio-review
+uploads_21-strategy-skills/skills/business-case-builder
+uploads_21-strategy-skills/skills/transformation-roadmap
+uploads_21-strategy-skills/skills/kpi-architect
+uploads_strategy-engagement-skills/skills/operating-model-execution-plan
+uploads_strategy-engagement-skills/skills/value-realization-tracker
+phuryn_pm-skills/pm-product-strategy/skills/business-model
+phuryn_pm-skills/pm-product-strategy/skills/lean-canvas
+phuryn_pm-skills/pm-product-strategy/skills/product-vision
+phuryn_pm-skills/pm-product-strategy/skills/value-proposition
+phuryn_pm-skills/pm-marketing-growth/skills/north-star-metric
+
+# --- Ideas into next steps -----------------------------------------------------
+phuryn_pm-skills/pm-product-discovery/skills/brainstorm-ideas-new
+phuryn_pm-skills/pm-product-discovery/skills/opportunity-solution-tree
 phuryn_pm-skills/pm-execution/skills/prioritization-frameworks
+phuryn_pm-skills/pm-execution/skills/user-stories
+phuryn_pm-skills/pm-execution/skills/job-stories
+phuryn_pm-skills/pm-execution/skills/retro
 uploads_21-strategy-skills/skills/decision-memo
+
+# --- Interviews, meetings and research -----------------------------------------
+phuryn_pm-skills/pm-product-discovery/skills/interview-script
+phuryn_pm-skills/pm-product-discovery/skills/summarize-interview
 phuryn_pm-skills/pm-execution/skills/summarize-meeting
+anthropics_knowledge-work-plugins/sales/skills/call-summary
+anthropics_knowledge-work-plugins/design/skills/user-research
+anthropics_knowledge-work-plugins/human-resources/skills/interview-prep
+
+# --- Running the work ----------------------------------------------------------
+anthropics_knowledge-work-plugins/operations/skills/status-report
+anthropics_knowledge-work-plugins/operations/skills/process-doc
+anthropics_knowledge-work-plugins/operations/skills/process-optimization
+anthropics_knowledge-work-plugins/operations/skills/change-request
+anthropics_knowledge-work-plugins/operations/skills/capacity-plan
+anthropics_knowledge-work-plugins/operations/skills/vendor-review
+anthropics_knowledge-work-plugins/human-resources/skills/onboarding
+anthropics_knowledge-work-plugins/human-resources/skills/performance-review
+
+# --- Writing and messaging -----------------------------------------------------
+uploads_21-strategy-skills/skills/narrative-builder
+affaan-m_ecc/skills/article-writing
+anthropics_knowledge-work-plugins/marketing/skills/draft-content
+anthropics_knowledge-work-plugins/design/skills/ux-copy
+anthropics_knowledge-work-plugins/design/skills/design-critique
+phuryn_pm-skills/pm-marketing-growth/skills/positioning-ideas
+phuryn_pm-skills/pm-marketing-growth/skills/value-prop-statements
+phuryn_pm-skills/pm-marketing-growth/skills/marketing-ideas
+charlie947_social-media-skills/skills/post-writer
+charlie947_social-media-skills/skills/content-matrix
+Jakeschincariol_linkedin-agent-skill/li-repurpose
+nigelguy007_instagramskills/skills/ig-repurpose
+
+# --- Fundraising ---------------------------------------------------------------
+uploads_fundraising-intelligence/skills/fundraising-narrative
+uploads_fundraising-intelligence/skills/investor-meeting-brief
+uploads_fundraising-intelligence/skills/partner-question-builder
+uploads_fundraising-intelligence/skills/vc-outreach-writer
+uploads_fundraising-intelligence/skills/intro-request-writer
+uploads_fundraising-intelligence/skills/term-sheet-comparator
+affaan-m_ecc/skills/investor-materials
+dkorobtsov_pitch-deck/pitch-deck-audit
