@@ -176,7 +176,9 @@ def ensure_assistant(api: Api, knowledge_bases: list[dict[str, Any]], chat_model
                 for knowledge in knowledge_bases
             ],
         },
-        "params": {"system": SYSTEM_PROMPT, "function_calling": "legacy"},
+        # think=False: answer directly. The model's silent reasoning step can
+        # double the wait and adds little when the answer is in the documents.
+        "params": {"system": SYSTEM_PROMPT, "function_calling": "legacy", "think": False},
         "access_grants": EVERYONE_CAN_READ,
         "is_active": True,
     }

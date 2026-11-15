@@ -144,6 +144,15 @@ echo 999999 > "$APP/run/ollama.pid"   # a leftover pidfile, as after a reboot
 check "stale pidfile is ignored"       "$APP/privatellm" start
 check "stale pidfile is removed"       test ! -e "$APP/run/ollama.pid"
 check "data folder is private"         test "$(stat -c %a "$APP/data" 2>/dev/null || stat -f %Lp "$APP/data")" = "700"
+curl -fsS "http://127.0.0.1:$MODEL_PORT/__requests" > "$WORK/model-requests.json"
+check "no extra model call per question" python3 -c "
+import json, sys
+chats = [r['body'] for r in json.load(open(sys.argv[1])) if r['path'] == '/api/chat']
+sys.exit(1 if any('<chat_history>' in str(c.get('messages')) for c in chats) or not chats else 0)" "$WORK/model-requests.json"
+check "model is told not to think first" python3 -c "
+import json, sys
+chats = [r['body'] for r in json.load(open(sys.argv[1])) if r['path'] == '/api/chat']
+sys.exit(0 if chats and all(c.get('think') is False for c in chats) else 1)" "$WORK/model-requests.json"
 check "restart works"                  "$APP/privatellm" restart
 check "still answers after restart"    finds 'When does the Zanzibar office open?' "handbook.md"
 
