@@ -8,4 +8,5 @@ apps/
 bin/
 sync/sources.yaml
 sync/credentials.env
+sync/*.json
 __pycache__/
