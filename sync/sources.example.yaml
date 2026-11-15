@@ -3,6 +3,9 @@
 # then run:  ./privatellm sync
 #
 # Every run copies only what is new or changed, and removes what was deleted.
+# Everything listed here goes into the 'Synced Sources' knowledge base, which
+# sync keeps as an exact copy of these sources. Documents you upload by hand
+# belong in 'Company Knowledge', which sync never touches.
 # __KNOWLEDGE_ID__ is filled in for you. Passwords and tokens go in
 # sync/credentials.env (never in this file).
 
@@ -17,6 +20,7 @@ sources:
   - name: documents
     source: /Users/you/Documents/Company
     kb-id: __KNOWLEDGE_ID__
+    target-path: documents   # folder inside the knowledge base
     filter:
       include: ["**/*.pdf", "**/*.docx", "**/*.pptx", "**/*.xlsx", "**/*.csv", "**/*.md", "**/*.txt"]
 
@@ -25,24 +29,29 @@ sources:
   - name: google-drive
     source: gdrive:YOUR_FOLDER_ID
     kb-id: __KNOWLEDGE_ID__
+    target-path: google-drive   # folder inside the knowledge base
 
   # Dropbox folder. Needs DROPBOX_TOKEN.
   - name: dropbox
     source: dropbox:/Company
     kb-id: __KNOWLEDGE_ID__
+    target-path: dropbox   # folder inside the knowledge base
 
   # SharePoint site. Needs SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID,
   # SHAREPOINT_CLIENT_SECRET.
   - name: sharepoint
     source: sharepoint:YourSite/Documents
     kb-id: __KNOWLEDGE_ID__
+    target-path: sharepoint   # folder inside the knowledge base
 
   # A website. Pages are found through its sitemap and links.
   - name: website
     source: web:https://www.example.com
     kb-id: __KNOWLEDGE_ID__
+    target-path: website   # folder inside the knowledge base
 
   # A Notion workspace or page. Needs NOTION_TOKEN.
   - name: notion
     source: notion:ROOT_PAGE_ID
     kb-id: __KNOWLEDGE_ID__
+    target-path: notion   # folder inside the knowledge base

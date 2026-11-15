@@ -45,9 +45,13 @@ ask() {
     -d "{\"model\":\"assistant\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"$1\"}]}"
 }
 
-# Name of the best-matching document for a question.
-top_source() {
-  ask "$1" | python3 -c "import json,sys; print(json.load(sys.stdin)['sources'][0]['metadata'][0]['name'])"
+# finds <question> <file name>: true if that file is the best match in one of
+# the Assistant's knowledge bases (hand-uploaded or synced).
+finds() {
+  ask "$1" | python3 -c "
+import json, sys
+tops = [source['metadata'][0]['name'] for source in json.load(sys.stdin)['sources']]
+sys.exit(0 if sys.argv[1] in tops else 1)" "$2"
 }
 
 # The prompt that reached the model (the stand-in repeats it back).
@@ -116,15 +120,22 @@ check "open to network after setup"    grep -q "From other devices" <("$APP/priv
 check "configure can be run again"     "$APP/privatellm" configure
 check "api key file is private"        test "$(stat -c %a "$APP/run/api-key" 2>/dev/null || stat -f %Lp "$APP/run/api-key")" = "600"
 
+# A document uploaded by hand must survive every sync.
+printf 'The hand-uploaded note says the spare key is in the blue tin.\n' > "$WORK/hand-note.txt"
+curl -fsS -X POST "$BASE/api/v1/files/" -H "Authorization: Bearer $(cat "$APP/run/api-key")" \
+  -F "file=@$WORK/hand-note.txt" -F "metadata={\"knowledge_id\":\"$(cat "$APP/run/knowledge-id")\"}" >/dev/null
+sleep 5
 "$APP/privatellm" sync >"$WORK/sync1.log" 2>&1 || true
 check "sync adds the three documents"  grep -q "3 added" "$WORK/sync1.log"
 sleep 10   # indexing happens in the background after upload
 "$APP/privatellm" sync >"$WORK/sync2.log" 2>&1 || true
 check "second sync changes nothing"    grep -q "3 unchanged" "$WORK/sync2.log"
+check "hand-uploaded document survives" grep -q "hand-note.txt" <(curl -fsS -H "Authorization: Bearer $(cat "$APP/run/api-key")" "$BASE/api/v1/knowledge/$(cat "$APP/run/knowledge-id")/files")
+check "it is still found by a question" finds 'Where is the spare key kept?' "hand-note.txt"
 
-check "office question finds handbook" test "$(top_source 'When does the Zanzibar office open?')" = "handbook.md"
-check "parking question finds policy"  test "$(top_source 'What colour are visitor parking permits?')" = "parking.txt"
-check "order question finds the sheet" test "$(top_source 'Which customer placed order 1002?')" = "orders.csv"
+check "office question finds handbook" finds 'When does the Zanzibar office open?' "handbook.md"
+check "parking question finds policy"  finds 'What colour are visitor parking permits?' "parking.txt"
+check "order question finds the sheet" finds 'Which customer placed order 1002?' "orders.csv"
 model_prompt 'When does the Zanzibar office open?' >"$WORK/prompt.txt"
 check "document text reaches model"    grep -q "09:15" "$WORK/prompt.txt"
 check "system prompt reaches model"    grep -q "private assistant for this team" "$WORK/prompt.txt"
@@ -134,15 +145,16 @@ check "stale pidfile is ignored"       "$APP/privatellm" start
 check "stale pidfile is removed"       test ! -e "$APP/run/ollama.pid"
 check "data folder is private"         test "$(stat -c %a "$APP/data" 2>/dev/null || stat -f %Lp "$APP/data")" = "700"
 check "restart works"                  "$APP/privatellm" restart
-check "still answers after restart"    test "$(top_source 'When does the Zanzibar office open?')" = "handbook.md"
+check "still answers after restart"    finds 'When does the Zanzibar office open?' "handbook.md"
 
 curl -fsS -o "$WORK/served-logo.png" "$BASE/static/favicon.png"
 check "brand logo is served"           cmp "$WORK/served-logo.png" "$APP/branding/static/favicon.png"
 check "brand colours are served"       grep -qi "161a24" <(curl -fsS "$BASE/static/custom.css")
-check "brand name is shown"            grep -q "Hack the Future Lab" <(curl -fsS "$BASE/api/config")
+check "brand name is shown exactly"    test "$(curl -fsS "$BASE/api/config" | field name)" = "MIRAH | The Oracle"
 mv "$APP/branding" "$APP/branding-off"
 "$APP/privatellm" restart >/dev/null 2>&1 || true
 check "removing branding restores it"  test "$(curl -fsS "$BASE/static/custom.css" | wc -c | tr -d ' ')" = "0"
+check "and restores the standard name" test "$(curl -fsS "$BASE/api/config" | field name)" = "Open WebUI"
 mv "$APP/branding-off" "$APP/branding"
 "$APP/privatellm" restart >/dev/null 2>&1 || true
 

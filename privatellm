@@ -112,20 +112,50 @@ webui_static_dir() {
   return 1
 }
 
+# copy_replacing <from dir> <to dir>: copies every file by deleting the old one
+# first. Overwriting in place could also alter the installer's cached copy of
+# the same file, where the two share storage.
+copy_replacing() {
+  local relative
+  (cd "$1" && find . -type f) | while IFS= read -r relative; do
+    mkdir -p "$2/$(dirname "$relative")"
+    rm -f "$2/$relative"
+    cp "$1/$relative" "$2/$relative"
+  done
+}
+
+# The chat software adds " (Open WebUI)" after a custom name. Its licence lets
+# an install with 50 or fewer users in 30 days remove that, so it is opt-in:
+# BRAND_HIDE_OPEN_WEBUI_SUFFIX=true in branding/brand.env.
+apply_name_suffix() {
+  local settings_file
+  settings_file="$(dirname "$(dirname "$1")")/env.py"
+  [[ -f "$settings_file" ]] || return 0
+  if [[ "${BRAND_HIDE_OPEN_WEBUI_SUFFIX:-false}" == "true" && -d "$BRAND_DIR/static" ]]; then
+    [[ -f "$settings_file.original" ]] || cp "$settings_file" "$settings_file.original"
+    sed "s/^    WEBUI_NAME += ' (Open WebUI)'\$/    pass  # suffix hidden by branding\/brand.env/" \
+      "$settings_file.original" >"$settings_file.new"
+    mv -f "$settings_file.new" "$settings_file"
+  elif [[ -f "$settings_file.original" ]]; then
+    cp "$settings_file.original" "$settings_file.new"
+    mv -f "$settings_file.new" "$settings_file"
+  fi
+}
+
 # Puts the logo and colours from branding/static in place before each start.
 # The originals are saved once; removing the branding folder restores them.
 apply_branding() {
-  local static backup="$APPS_DIR/original-static"
+  local static backup
   static="$(webui_static_dir 2>/dev/null)" || { echo "Note: could not find the chat software's files, so branding was skipped."; return 0; }
+  # Kept beside the software, so it always matches the copy it came from.
+  backup="$static.original"
   if [[ -d "$BRAND_DIR/static" ]]; then
-    if [[ ! -d "$backup" ]]; then
-      mkdir -p "$APPS_DIR"
-      cp -R "$static" "$backup"
-    fi
-    cp -R "$BRAND_DIR/static/." "$static/"
+    [[ -d "$backup" ]] || cp -R "$static" "$backup"
+    copy_replacing "$BRAND_DIR/static" "$static"
   elif [[ -d "$backup" ]]; then
-    cp -R "$backup/." "$static/"
+    copy_replacing "$backup" "$static"
   fi
+  apply_name_suffix "$static"
 }
 
 start_webui() {
@@ -185,8 +215,11 @@ run_sync() {
   [[ -f "$key_file" ]] || fail "No API key yet. Run ./privatellm configure first."
   [[ -f "$sources" ]] || fail "Copy sync/sources.example.yaml to sync/sources.yaml and edit it first."
   [[ -f "$ROOT/sync/credentials.env" ]] && { set -a; source "$ROOT/sync/credentials.env"; set +a; }
-  local kb_id
-  kb_id="$(cat "$ROOT/run/knowledge-id")"
+  # Sync mirrors its sources and deletes everything else in the target, so it
+  # gets its own knowledge base and never touches hand-uploaded documents.
+  local kb_id_file="$ROOT/run/sync-knowledge-id" kb_id
+  [[ -s "$kb_id_file" ]] || fail "Run ./privatellm configure once more first: it creates the 'Synced Sources' knowledge base that sync fills."
+  kb_id="$(cat "$kb_id_file")"
   # oikb reads .oikb.yaml from the current directory.
   local work="$RUN_DIR/sync"
   mkdir -p "$work"

@@ -1,0 +1,30 @@
+# Hack the Future Lab sources for the assistant.
+# To use:  cp sync/sources.htfl.yaml sync/sources.yaml   then   ./privatellm sync
+#
+# Both sources land in the 'Synced Sources' knowledge base and are refreshed
+# every time you run ./privatellm sync.
+
+sources:
+  # The public Lab website: the three programme days and the contributor
+  # pages. Styling, script and image files are left out. So is the home page:
+  # the crawler collects it twice and the sync tool refuses duplicates.
+  - name: lab-website
+    source: web:https://www.nyuadhtfl.com
+    kb-id: __KNOWLEDGE_ID__
+    target-path: lab-website
+    filter:
+      include: ["programme/**", "speakers/**"]
+
+  # The Oracle / MIRAH project documents (scope, architecture, working
+  # agreements) from the private GitHub repository. Only the documents on the
+  # main branch: the prototype branches hold made-up sample content, which
+  # would be answered as if it were real.
+  # Needs GITHUB_TOKEN in sync/credentials.env (a read-only token for that
+  # repository).
+  - name: oracle-project-docs
+    source: github:nigelguy007/HTFL-NYUAD
+    branch: main
+    kb-id: __KNOWLEDGE_ID__
+    target-path: oracle-project-docs
+    filter:
+      include: ["README.md", "docs/**/*.md"]

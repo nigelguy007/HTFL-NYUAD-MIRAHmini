@@ -19,9 +19,16 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 RUN_DIR = ROOT / "run"
 KNOWLEDGE_ID_FILE = RUN_DIR / "knowledge-id"
+SYNC_KNOWLEDGE_ID_FILE = RUN_DIR / "sync-knowledge-id"
 API_KEY_FILE = RUN_DIR / "api-key"
 
+# Two knowledge bases, because a sync makes its target an exact mirror of the
+# sources and deletes everything else in it. Hand-uploaded documents live in
+# the first; ./privatellm sync only ever touches the second.
 KNOWLEDGE_NAME = "Company Knowledge"
+KNOWLEDGE_DESCRIPTION = "Documents uploaded by hand. Never changed by sync."
+SYNC_KNOWLEDGE_NAME = "Synced Sources"
+SYNC_KNOWLEDGE_DESCRIPTION = "Filled by ./privatellm sync. Do not upload here: sync deletes anything not in the sources."
 ASSISTANT_ID = "assistant"
 ASSISTANT_NAME = "Assistant"
 REQUEST_TIMEOUT_SECONDS = 60
@@ -98,10 +105,11 @@ def sign_in_or_create_admin(api: Api, name: str, email: str, password: str) -> s
     return result["token"]
 
 
-def ensure_knowledge_base(api: Api) -> dict[str, Any]:
-    if KNOWLEDGE_ID_FILE.exists():
+def ensure_knowledge_base(api: Api, id_file: Path, name: str, description: str) -> dict[str, Any]:
+    """Returns the knowledge base whose id is saved in id_file, creating it if needed."""
+    if id_file.exists():
         try:
-            existing = api.request("GET", f"/api/v1/knowledge/{KNOWLEDGE_ID_FILE.read_text().strip()}")
+            existing = api.request("GET", f"/api/v1/knowledge/{id_file.read_text().strip()}")
             print(f"Knowledge base '{existing['name']}' already exists.")
             return existing
         except ApiError as error:
@@ -110,14 +118,10 @@ def ensure_knowledge_base(api: Api) -> dict[str, Any]:
     created = api.request(
         "POST",
         "/api/v1/knowledge/create",
-        {
-            "name": KNOWLEDGE_NAME,
-            "description": "Documents the whole team can ask about.",
-            "access_grants": EVERYONE_CAN_READ,
-        },
+        {"name": name, "description": description, "access_grants": EVERYONE_CAN_READ},
     )
-    KNOWLEDGE_ID_FILE.write_text(created["id"] + "\n")
-    print(f"Created knowledge base '{KNOWLEDGE_NAME}'.")
+    id_file.write_text(created["id"] + "\n")
+    print(f"Created knowledge base '{name}'.")
     return created
 
 
@@ -154,7 +158,7 @@ def share_base_model(api: Api, chat_model: str) -> None:
     )
 
 
-def ensure_assistant(api: Api, knowledge: dict[str, Any], chat_model: str) -> None:
+def ensure_assistant(api: Api, knowledge_bases: list[dict[str, Any]], chat_model: str) -> None:
     share_base_model(api, chat_model)
     form = {
         "id": ASSISTANT_ID,
@@ -169,6 +173,7 @@ def ensure_assistant(api: Api, knowledge: dict[str, Any], chat_model: str) -> No
                     "description": knowledge.get("description", ""),
                     "type": "collection",
                 }
+                for knowledge in knowledge_bases
             ],
         },
         "params": {"system": SYSTEM_PROMPT, "function_calling": "legacy"},
@@ -202,12 +207,15 @@ def main() -> None:
     name, email, password = read_credentials()
     api = Api(base_url)
     api.token = sign_in_or_create_admin(api, name, email, password)
-    knowledge = ensure_knowledge_base(api)
-    ensure_assistant(api, knowledge, chat_model)
+    uploads = ensure_knowledge_base(api, KNOWLEDGE_ID_FILE, KNOWLEDGE_NAME, KNOWLEDGE_DESCRIPTION)
+    synced = ensure_knowledge_base(api, SYNC_KNOWLEDGE_ID_FILE, SYNC_KNOWLEDGE_NAME, SYNC_KNOWLEDGE_DESCRIPTION)
+    ensure_assistant(api, [uploads, synced], chat_model)
     ensure_api_key(api)
 
     print("\nDone. Open the address shown by ./privatellm status, log in, and pick 'Assistant'.")
-    print("To load documents: copy sync/sources.example.yaml to sync/sources.yaml, edit it, run ./privatellm sync.")
+    print(f"Upload documents by hand into '{KNOWLEDGE_NAME}'.")
+    print(f"To pull from folders, websites or drives into '{SYNC_KNOWLEDGE_NAME}':")
+    print("  copy sync/sources.example.yaml to sync/sources.yaml, edit it, run ./privatellm sync.")
 
 
 if __name__ == "__main__":
