@@ -53,24 +53,36 @@ account first.
 
 ## Add your documents
 
+The Assistant answers from two knowledge bases:
+
+- **Company Knowledge** is for documents you upload by hand: Workspace,
+  Knowledge, Company Knowledge, **+**, Upload files. Nothing else changes it.
+- **Synced Sources** is filled by `./privatellm sync` from folders, cloud
+  drives, websites or a GitHub repository. Sync keeps it an exact copy of those
+  sources and deletes anything else in it, so never upload there by hand.
+
+To set up sync:
+
 ```bash
 cp sync/sources.example.yaml sync/sources.yaml
 ```
 
 Edit `sync/sources.yaml`: keep the sources you use, delete the rest. Passwords
-and tokens for cloud drives go in `sync/credentials.env` as `NAME=value` lines
-(the names are listed in the example file). Then:
+and tokens go in `sync/credentials.env` as `NAME=value` lines (the names are
+listed in the example file). Then:
 
 ```bash
 ./privatellm sync
 ```
 
-Run it again whenever documents change. Only new and changed files are copied,
-and deleted files are removed. Indexing continues in the background for a while
-after a large first sync.
+Run it again whenever the sources change. Only new and changed files are
+copied. Indexing continues in the background for a while after a large first
+sync.
 
-Cloud drive files are downloaded to this Mac and indexed here. Nothing is
-uploaded.
+`sync/sources.htfl.yaml` is a ready-made list for Hack the Future Lab: the
+public Lab website and the Oracle project documents on GitHub.
+
+Synced files are downloaded to this Mac and indexed here. Nothing is uploaded.
 
 ## Add people
 
@@ -109,7 +121,8 @@ again, and set the Mac not to sleep (System Settings, Energy).
   accident.
 - **Logo, colours and name:** the `branding` folder. Replace the image files in
   `branding/static` with your own (same file names and sizes), edit the colours
-  in `branding/static/custom.css` and the name in `branding/brand.env`, then
+  in `branding/static/custom.css` and the name in `branding/brand.env` (which also hides the
+  "(Open WebUI)" the software adds after a custom name), then
   `./privatellm restart`. To go back to the standard look, rename or delete the
   `branding` folder and restart. The chat software's licence allows replacing
   its logo and colours only while 50 or fewer people use this install in any
