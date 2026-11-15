@@ -1,0 +1,27 @@
+# Skills copied into the assistant by:  ./privatellm skills
+#
+# One per line: the skill's folder inside the skills library
+# (https://github.com/nigelguy007/claude-skills-library, under skills/).
+# Add or remove lines, then run ./privatellm skills again.
+#
+# Only skills that are plain instructions work here. Skills that tell Claude
+# to run commands, search the web or use connected apps do nothing on this
+# assistant, and skills over 900 words are skipped.
+
+# Questioning and framing
+mattpocock_skills/skills/productivity/grilling
+uploads_strategy-engagement-skills/skills/problem-framing-diagnosis
+phuryn_pm-skills/pm-product-discovery/skills/identify-assumptions-new
+phuryn_pm-skills/pm-execution/skills/pre-mortem
+
+# Seeing patterns
+phuryn_pm-skills/pm-product-strategy/skills/swot-analysis
+phuryn_pm-skills/pm-product-strategy/skills/pestle-analysis
+phuryn_pm-skills/pm-execution/skills/stakeholder-map
+
+# Turning ideas into next steps
+phuryn_pm-skills/pm-product-discovery/skills/brainstorm-ideas-new
+uploads_strategy-engagement-skills/skills/strategic-option-design
+phuryn_pm-skills/pm-execution/skills/prioritization-frameworks
+uploads_21-strategy-skills/skills/decision-memo
+phuryn_pm-skills/pm-execution/skills/summarize-meeting

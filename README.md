@@ -84,6 +84,28 @@ public Lab website and the Oracle project documents on GitHub.
 
 Synced files are downloaded to this Mac and indexed here. Nothing is uploaded.
 
+## Add skills
+
+A skill is a page of instructions for one kind of task, such as running a
+pre-mortem or drafting a decision memo. `skills/selected.txt` lists the ones to
+copy in from the skills library on GitHub:
+
+```bash
+./privatellm skills
+```
+
+In a chat, type `$` and pick a skill to switch it on for that conversation. It
+is not applied to other chats.
+
+To add more, put the skill's folder path in `skills/selected.txt` and run the
+command again. Two limits:
+
+- Only skills that are plain instructions do anything here. Most skills in the
+  library were written for Claude Code and tell it to run commands, search the
+  web or use connected apps, none of which this assistant can do.
+- A skill is sent with every message of the chat it is switched on for, so it
+  uses up room the conversation needs. Skills over 900 words are skipped.
+
 ## Add people
 
 1. They open the address from `./privatellm status` and sign up.

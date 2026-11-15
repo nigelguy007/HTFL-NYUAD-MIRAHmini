@@ -90,7 +90,7 @@ approve_colleague() {
 
 # --- Arrange: a private copy of the project, test documents, the stand-in ----
 mkdir -p "$APP" "$DOCS/policies"
-cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$SOURCE_ROOT/sync" "$SOURCE_ROOT/branding" "$APP/"
+cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$SOURCE_ROOT/sync" "$SOURCE_ROOT/branding" "$SOURCE_ROOT/skills" "$APP/"
 cat > "$APP/settings.env" <<EOF
 CHAT_MODEL=test-chat
 EMBED_MODEL=test-embed
@@ -172,6 +172,29 @@ check "unapproved user is locked out"  test "$(colleague_ask_status)" = "401"
 check "admin can approve"              test "$(approve_colleague)" = "user"
 check "approved user gets an answer"   test "$(colleague_ask_status)" = "200"
 check "their answer uses the document" grep -q "09:15" "$WORK/colleague.json"
+
+# --- Skills: copied from a library, switched on per chat -----------------------
+mkdir -p "$WORK/library/pack/short-skill" "$WORK/library/pack/long-skill"
+printf -- '---\nname: short-skill\ndescription: A test skill.\n---\n\nAlways mention the purple heron about $ARGUMENTS.\n' > "$WORK/library/pack/short-skill/SKILL.md"
+python3 -c "print('word ' * 1200)" > "$WORK/library/pack/long-skill/SKILL.md"
+printf 'pack/short-skill\npack/long-skill\n' > "$APP/skills/selected.txt"
+export SKILLS_LIBRARY_URL="file://$WORK/library"
+"$APP/privatellm" skills >"$WORK/skills1.log" 2>&1 || true
+check "a short skill is added"         grep -q "short-skill: added" "$WORK/skills1.log"
+check "an over-long skill is skipped"  grep -q "long-skill: skipped (1200 words" "$WORK/skills1.log"
+"$APP/privatellm" skills >"$WORK/skills2.log" 2>&1 || true
+check "running again changes nothing"  grep -q "short-skill: unchanged" "$WORK/skills2.log"
+printf -- '---\nname: short-skill\ndescription: A test skill.\n---\n\nAlways mention the green heron.\n' > "$WORK/library/pack/short-skill/SKILL.md"
+"$APP/privatellm" skills >"$WORK/skills3.log" 2>&1 || true
+check "a changed skill is updated"     grep -q "short-skill: updated" "$WORK/skills3.log"
+curl -s -o "$WORK/skill-chat.json" -X POST "$BASE/api/chat/completions" \
+  -H "Authorization: Bearer $(login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD")" -H "Content-Type: application/json" \
+  -d '{"model":"assistant","stream":false,"skill_ids":["short-skill"],"messages":[{"role":"user","content":"Hello"}]}'
+check "a colleague can switch it on"   grep -q "green heron" "$WORK/skill-chat.json"
+curl -s -o "$WORK/no-skill-chat.json" -X POST "$BASE/api/chat/completions" \
+  -H "Authorization: Bearer $(login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD")" -H "Content-Type: application/json" \
+  -d '{"model":"assistant","stream":false,"messages":[{"role":"user","content":"Hello"}]}'
+check "it stays out of other chats"    bash -c "! grep -q 'green heron' '$WORK/no-skill-chat.json'"
 
 echo
 if (( failures == 0 )); then
