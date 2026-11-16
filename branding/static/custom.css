@@ -43,3 +43,154 @@ html:root {
 :focus-visible {
   outline-color: var(--brand-accent);
 }
+
+/* ---------------------------------------------------------------------------
+   Hack the Future Lab wordmark and backgrounds.
+   The typeface (Michroma, SIL Open Font Licence) and both photographs are the
+   ones used on nyuadhtfl.com. They are served from this Mac, so nothing is
+   fetched from the internet.
+   --------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Michroma";
+  src: url("/static/brand/Michroma-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --brand-ivory: #f3eee4;
+  --brand-night: 5, 7, 11;     /* site theme colour, as r, g, b */
+  --brand-navy: 22, 26, 36;    /* site background, as r, g, b */
+  --brand-paper: 251, 249, 244;
+}
+
+/* --- Sign-in page: the gateway photograph, wordmark left, form in glass ----- */
+#auth-page {
+  --mark: clamp(2.2rem, 5.6vw, 5.4rem);
+  --mark-foot: 12vh;
+  --mark-left: 7vw;
+}
+
+#auth-page > div.absolute.h-full {
+  background:
+    linear-gradient(100deg, rgba(var(--brand-night), 0.9) 0%, rgba(var(--brand-night), 0.42) 46%, rgba(var(--brand-night), 0.78) 100%),
+    linear-gradient(to top, rgba(var(--brand-night), 0.92) 0%, rgba(var(--brand-night), 0) 52%),
+    url("/static/brand/gateway.webp") 58% center / cover no-repeat,
+    rgb(var(--brand-night));
+}
+
+#auth-page::before,
+#auth-page::after,
+#auth-container::before {
+  position: absolute;
+  left: var(--mark-left);
+  z-index: 40;
+  font-family: "Michroma", "Noto Sans", sans-serif;
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* "HACK THE": the small lead line. */
+#auth-page::before {
+  content: "Hack the";
+  bottom: calc(var(--mark-foot) + var(--mark) * 1.62);
+  font-size: calc(var(--mark) * 0.47);
+  letter-spacing: -0.04em;
+  line-height: 1.25;
+  color: var(--brand-ivory);
+}
+
+/* "FUTURE LAB": outlined, as on the site. */
+#auth-page::after {
+  content: "Future Lab";
+  bottom: calc(var(--mark-foot) + var(--mark) * 0.52);
+  font-size: var(--mark);
+  letter-spacing: -0.06em;
+  line-height: 1.06;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--brand-ivory);
+}
+
+/* "ABU DHABI": a wide-spaced lavender line beneath, led by a short rule. */
+#auth-container::before {
+  content: "Abu Dhabi";
+  bottom: var(--mark-foot);
+  padding-left: calc(var(--mark) * 0.9);
+  font-size: calc(var(--mark) * 0.2);
+  letter-spacing: 0.46em;
+  line-height: 1.6;
+  color: var(--brand-accent);
+  background: linear-gradient(var(--brand-accent), var(--brand-accent)) left center / calc(var(--mark) * 0.62) 1px no-repeat;
+}
+
+/* The form: a square-cornered glass panel, like the site's buttons. */
+#auth-container > div > div.my-auto {
+  color: var(--brand-ivory);
+}
+
+#auth-container > div > div.my-auto > div {
+  padding: 2.25rem 2rem 2rem;
+  background: rgba(var(--brand-night), 0.58);
+  border: 1px solid rgba(180, 156, 255, 0.28);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+@media (min-width: 1024px) {
+  /* Wide screens: wordmark bottom left, form to the right. */
+  #auth-container > div > div.my-auto {
+    align-items: flex-end;
+    padding-right: 7vw;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Narrow screens: wordmark at the top, form beneath it. */
+  #auth-page {
+    --mark: clamp(1.7rem, 9vw, 3rem);
+    --mark-left: 1.5rem;
+  }
+  #auth-page::before { top: 5.2rem; bottom: auto; }
+  #auth-page::after { top: calc(5.2rem + var(--mark) * 0.62); bottom: auto; }
+  #auth-container::before { top: calc(5.2rem + var(--mark) * 1.95); bottom: auto; }
+  #auth-container > div > div.my-auto { padding-top: calc(5rem + var(--mark) * 2.4); }
+}
+
+/* --- After sign-in: the coast at sunset, dimmed, behind the whole app ------- */
+div:has(> #sidebar) {
+  background:
+    linear-gradient(to bottom, rgba(var(--brand-paper), 0.78) 0%, rgba(var(--brand-paper), 0.93) 38%, rgba(var(--brand-paper), 0.97) 100%),
+    url("/static/brand/coast.webp") center top / cover no-repeat,
+    rgb(var(--brand-paper));
+}
+
+.dark div:has(> #sidebar) {
+  background:
+    linear-gradient(to bottom, rgba(var(--brand-navy), 0.58) 0%, rgba(var(--brand-navy), 0.93) 34%, rgba(var(--brand-navy), 0.97) 100%),
+    url("/static/brand/coast.webp") center top / cover no-repeat,
+    rgb(var(--brand-navy));
+}
+
+/* The small wordmark, top right of every page once signed in. */
+div:has(> #sidebar)::after {
+  content: "Hack the Future Lab  \2014  Abu Dhabi";
+  position: fixed;
+  top: 0.95rem;
+  right: 6.25rem;
+  z-index: 35;
+  font: 400 0.62rem/1.6 "Michroma", "Noto Sans", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: pre;
+  color: var(--color-gray-600);
+  pointer-events: none;
+}
+
+.dark div:has(> #sidebar)::after {
+  color: var(--color-gray-400);
+}
+
+@media (max-width: 900px) {
+  div:has(> #sidebar)::after { display: none; }
+}

@@ -141,7 +141,10 @@ again, and set the Mac not to sleep (System Settings, Energy).
   admin screens on every start, so a setting changed in the browser reverts on
   restart. That is deliberate: the privacy switches cannot be turned off by
   accident.
-- **Logo, colours and name:** the `branding` folder. Replace the image files in
+- **Logo, colours and name:** the `branding` folder. It also holds the
+  sign-in and chat background photos and the wordmark typeface, in
+  `branding/static/brand`; swap `gateway.webp` (sign-in) or `coast.webp` (chat)
+  for your own pictures, keeping the file names. Replace the image files in
   `branding/static` with your own (same file names and sizes), edit the colours
   in `branding/static/custom.css` and the name in `branding/brand.env` (which also hides the
   "(Open WebUI)" the software adds after a custom name), then
