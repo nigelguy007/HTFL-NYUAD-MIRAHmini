@@ -184,6 +184,16 @@ check "admin can approve"              test "$(approve_colleague)" = "user"
 check "approved user gets an answer"   test "$(colleague_ask_status)" = "200"
 check "their answer uses the document" grep -q "09:15" "$WORK/colleague.json"
 
+# --- A forgotten password can be reset on the host machine ---------------------
+RESET_EMAIL="$COLLEAGUE_EMAIL" RESET_PASSWORD="Brand-new-pass-789" "$APP/privatellm" reset-password >"$WORK/reset.log" 2>&1 || true
+check "reset lists the accounts"       grep -q "$ADMIN_EMAIL" "$WORK/reset.log"
+check "new password signs in"          test "$(login "$COLLEAGUE_EMAIL" "Brand-new-pass-789" role)" = "user"
+check "old password no longer works"   test "$(login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD" role)" = "None"
+COLLEAGUE_PASSWORD="Brand-new-pass-789"
+RESET_EMAIL="nobody@example.test" RESET_PASSWORD="Whatever-pass-1" "$APP/privatellm" reset-password >"$WORK/reset2.log" 2>&1 || true
+check "unknown email changes nothing"  grep -q "No account uses" "$WORK/reset2.log"
+check "assistant is named MIRAH"       grep -q '"name":"MIRAH"' <(curl -fsS -H "Authorization: Bearer $(login "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" "$BASE/api/models")
+
 # --- Skills: copied from a library, switched on per chat -----------------------
 mkdir -p "$WORK/library/pack/short-skill" "$WORK/library/pack/long-skill"
 printf -- '---\nname: short-skill\ndescription: A test skill.\n---\n\nAlways mention the purple heron about $ARGUMENTS.\n' > "$WORK/library/pack/short-skill/SKILL.md"

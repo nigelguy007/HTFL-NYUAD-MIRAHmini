@@ -137,6 +137,16 @@ html:root {
   backdrop-filter: blur(18px) saturate(1.2);
 }
 
+/* There is no reset-by-email, so say who can help. */
+#auth-container > div > div.my-auto > div::after {
+  content: "Forgot your password? Ask the person who runs MIRAH to reset it.";
+  display: block;
+  margin-top: 1.4rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-gray-400);
+}
+
 @media (min-width: 1024px) {
   /* Wide screens: wordmark bottom left, form to the right. */
   #auth-container > div > div.my-auto {

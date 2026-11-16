@@ -115,6 +115,16 @@ The address only works on your office network. For access from elsewhere, put
 the Mac and their devices on a private VPN such as Tailscale. Do not open the
 port to the internet: logins travel unencrypted.
 
+## Forgotten passwords
+
+There is no "forgot password" link, because the assistant cannot send email.
+
+- **Someone else forgot theirs:** as admin, go to your avatar, Admin Panel,
+  Users, click the person, and set a new password.
+- **You forgot yours, or it stopped working:** on the host Mac run
+  `./privatellm reset-password`. It lists the accounts, asks which one, and sets
+  a new password. The assistant can stay running.
+
 ## Everyday commands
 
 | Command | What it does |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the private assistant: Ollama (the model) and Open WebUI (the chat site).
-#   ./privatellm start | stop | restart | status | configure | sync | skills | logs
+#   ./privatellm start | stop | restart | status | configure | sync | skills | reset-password | logs
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -230,6 +230,22 @@ run_sync() {
   ( cd "$work" && OPEN_WEBUI_URL="http://127.0.0.1:$PORT" OPEN_WEBUI_API_KEY="$(cat "$key_file")" oikb sync "$@" )
 }
 
+# The chat software's own Python, which has the password-hashing library.
+webui_python() {
+  local program target
+  program="$(command -v open-webui)" || return 1
+  target="$(readlink "$program")" || return 1
+  [[ "$target" == /* ]] || target="$(dirname "$program")/$target"
+  echo "$(dirname "$target")/python"
+}
+
+run_reset_password() {
+  local python
+  python="$(webui_python)" || fail "Could not find the chat software. Run ./setup.sh first."
+  [[ -x "$python" ]] || fail "Could not find the chat software's Python at $python."
+  "$python" "$ROOT/scripts/reset_password.py" "$DATA_DIR/webui.db"
+}
+
 run_configure() {
   local was_configured=no
   configured && was_configured=yes
@@ -254,9 +270,10 @@ main() {
     status)       show_status ;;
     configure)    run_configure "$@" ;;
     sync)         run_sync "$@" ;;
+    reset-password) run_reset_password ;;
     skills)       WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/import_skills.py" ;;
     logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
-    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, logs." ;;
+    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, reset-password, logs." ;;
   esac
 }
 

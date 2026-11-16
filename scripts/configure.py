@@ -30,7 +30,8 @@ KNOWLEDGE_DESCRIPTION = "Documents uploaded by hand. Never changed by sync."
 SYNC_KNOWLEDGE_NAME = "Synced Sources"
 SYNC_KNOWLEDGE_DESCRIPTION = "Filled by ./privatellm sync. Do not upload here: sync deletes anything not in the sources."
 ASSISTANT_ID = "assistant"
-ASSISTANT_NAME = "Assistant"
+# The name people see in the chat. Set ASSISTANT_NAME in branding/brand.env.
+ASSISTANT_NAME = os.environ.get("ASSISTANT_NAME") or "Assistant"
 REQUEST_TIMEOUT_SECONDS = 60
 # The server is on this machine: never route these calls through a system proxy.
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -214,7 +215,7 @@ def main() -> None:
     ensure_assistant(api, [uploads, synced], chat_model)
     ensure_api_key(api)
 
-    print("\nDone. Open the address shown by ./privatellm status, log in, and pick 'Assistant'.")
+    print(f"\nDone. Open the address shown by ./privatellm status, log in, and pick '{ASSISTANT_NAME}'.")
     print(f"Upload documents by hand into '{KNOWLEDGE_NAME}'.")
     print(f"To pull from folders, websites or drives into '{SYNC_KNOWLEDGE_NAME}':")
     print("  copy sync/sources.example.yaml to sync/sources.yaml, edit it, run ./privatellm sync.")
