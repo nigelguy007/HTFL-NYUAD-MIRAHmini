@@ -184,12 +184,14 @@ check "still answers after restart"    finds 'When does the Zanzibar office open
 curl -fsS -o "$WORK/served-logo.png" "$BASE/static/favicon.png"
 check "brand logo is served"           cmp "$WORK/served-logo.png" "$APP/branding/static/favicon.png"
 check "brand colours are served"       grep -qi "161a24" <(curl -fsS "$BASE/static/custom.css")
+check "sign-in asks for a UserID"     grep -q "UserID" <(curl -fsS "$BASE/static/loader.js")
 check "wordmark typeface is served"    curl -fsS -o /dev/null "$BASE/static/brand/Michroma-Regular.ttf"
 check "background photos are served"   bash -c "curl -fsS -o /dev/null '$BASE/static/brand/gateway.webp' && curl -fsS -o /dev/null '$BASE/static/brand/coast.webp'"
 check "brand name is shown exactly"    test "$(curl -fsS "$BASE/api/config" | field name)" = "MIRAH | The Oracle"
 mv "$APP/branding" "$APP/branding-off"
 "$APP/privatellm" restart >/dev/null 2>&1 || true
 check "removing branding restores it"  test "$(curl -fsS "$BASE/static/custom.css" | wc -c | tr -d ' ')" = "0"
+check "and the standard sign-in form"  bash -c "! grep -q UserID <(curl -fsS '$BASE/static/loader.js')"
 check "and restores the standard name" test "$(curl -fsS "$BASE/api/config" | field name)" = "Open WebUI"
 mv "$APP/branding-off" "$APP/branding"
 "$APP/privatellm" restart >/dev/null 2>&1 || true

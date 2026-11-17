@@ -139,7 +139,7 @@ html:root {
 
 /* There is no reset-by-email, so say who can help. */
 #auth-container > div > div.my-auto > div::after {
-  content: "Creating an account? For your privacy, do not use your real name or email. Invent a username, and use username@mirah.local as the email.\A\A Forgot your password? Ask the person who runs MIRAH to reset it.";
+  content: "Creating an account? For your privacy, do not use your real name. Invent a UserID, such as desert-fox, and a display name.\A\A Forgot your password? Ask the person who runs MIRAH to reset it.";
   white-space: pre-line;
   display: block;
   margin-top: 1.4rem;
