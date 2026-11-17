@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs the private assistant: Ollama (the model) and Open WebUI (the chat site).
 #   ./privatellm start | stop | restart | status | configure | sync | skills | reset-password | reindex | logs
+#   ./privatellm access | contributor | library | export-user | delete-user | audit | training
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,8 +58,9 @@ pid_alive() {
   local file="$RUN_DIR/$1.pid" pid expected="$1"
   [[ -f "$file" ]] || return 1
   pid="$(cat "$file")"
-  [[ "$expected" == "webui" ]] && expected="open-webui"
-  if kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o command= 2>/dev/null | grep -q "$expected"; then
+  # The chat software runs as scripts/serve.py (as "open-webui serve" before that).
+  [[ "$expected" == "webui" ]] && expected="open-webui|serve\.py"
+  if kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o command= 2>/dev/null | grep -Eq "$expected"; then
     return 0
   fi
   rm -f "$file"
@@ -169,11 +171,15 @@ start_webui() {
   fi
   is_up "http://127.0.0.1:$PORT/health" && fail "Something else is already using port $PORT. Change PORT in settings.env."
   apply_branding
+  local python
+  python="$(webui_python)" || fail "Could not find the chat software. Run ./setup.sh first."
   DATA_DIR="$DATA_DIR" \
   OLLAMA_BASE_URL="$OLLAMA_URL" \
   RAG_OLLAMA_BASE_URL="$OLLAMA_URL" \
   RAG_EMBEDDING_MODEL="$EMBED_MODEL" \
-    nohup open-webui serve --host "$(listen_address)" --port "$PORT" >"$LOG_DIR/webui.log" 2>&1 &
+  MIRAH_SCRIPTS_DIR="$ROOT/scripts" \
+  MIRAH_CONSENT_NOTICE="$ROOT/config/consent-notice.txt" \
+    nohup "$python" "$ROOT/scripts/serve.py" "$(listen_address)" "$PORT" >"$LOG_DIR/webui.log" 2>&1 &
   echo $! >"$RUN_DIR/webui.pid"
   wait_for "http://127.0.0.1:$PORT/health" "Open WebUI" webui
 }
@@ -257,6 +263,12 @@ run_reindex() {
   echo "Done."
 }
 
+# Access levels, the approval queue, export, deletion, audit and training data.
+run_govern() {
+  configured || fail "Run ./privatellm configure first."
+  DATA_DIR="$DATA_DIR" WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/govern.py" "$@"
+}
+
 run_configure() {
   local was_configured=no
   configured && was_configured=yes
@@ -285,7 +297,8 @@ main() {
     reindex)      run_reindex ;;
     skills)       WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/import_skills.py" ;;
     logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
-    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, reset-password, reindex, logs." ;;
+    access|contributor|library|export-user|delete-user|audit|training) run_govern "$command" "$@" ;;
+    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, reset-password, reindex, logs, access, contributor, library, export-user, delete-user, audit, training." ;;
   esac
 }
 

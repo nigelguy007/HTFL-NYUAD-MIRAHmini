@@ -130,6 +130,132 @@ The address only works on your office network. For access from elsewhere, put
 the Mac and their devices on a private VPN such as Tailscale. Do not open the
 port to the internet: logins travel unencrypted.
 
+## Access levels
+
+There is one MIRAH for everyone, but it answers from different libraries
+depending on who is asking.
+
+| Level | Reads | Set with |
+| --- | --- | --- |
+| `open` (everyone approved) | Company Knowledge, Synced Sources | `./privatellm access name@mirah.local open` |
+| `facilitators` | the above, plus the Facilitator Library | `./privatellm access name@mirah.local facilitators` |
+| `leads` | all of the above, plus the Lab Lead Library | `./privatellm access name@mirah.local leads` |
+
+A person below a library's level gets no text from it: it is left out of the
+search for them, not hidden afterwards. As admin you upload into the two
+restricted libraries the same way as into Company Knowledge.
+
+The admin account reads everything. Level changes apply to the next question.
+
+## Approving documents
+
+Nothing a contributor uploads reaches MIRAH until a curator approves it.
+
+1. Let someone submit: `./privatellm contributor name@mirah.local yes`. They
+   then see **Workspace**, **Knowledge**, **Submissions**, and upload there.
+2. See what is waiting: `./privatellm library pending`. Each line starts with
+   the document's id. Read one before deciding: `./privatellm library show <id>`.
+3. Decide, giving your name for the record:
+   - `./privatellm library approve <id> --level open --by "Your Name"` (or
+     `--level facilitators`, `--level leads`). MIRAH can answer from it within
+     seconds. The approved copy belongs to the admin and gets a new id, which
+     the command prints; the submitter's own copy is deleted, so they cannot
+     change what you approved.
+   - `./privatellm library reject <id> --by "Your Name"` deletes it.
+4. Take an approved document out again:
+   `./privatellm library remove <id> --by "Your Name"`. MIRAH stops answering
+   from it at once.
+
+Limits: approval is a command on the host computer, not a button in the
+browser. Contributors can see each other's waiting submissions, and can attach
+one to their own chat before it is approved. Documents you
+upload yourself as admin, and everything `./privatellm sync` brings in, skip
+the queue: you are the curator for those.
+
+## Consent
+
+Nobody gets an answer, the admin included, until they have typed **I AGREE**
+to the notice in `config/consent-notice.txt`. Edit that file to say what is
+true for your Lab. Its first line is its version: change `Version: 1` to
+`Version: 2` and everyone is asked again.
+
+Consent is recorded per purpose. Using MIRAH is one; training is a separate,
+optional one. People type these in the chat at any time:
+
+| They type | What happens |
+| --- | --- |
+| `I AGREE` | They can use MIRAH |
+| `I AGREE TO TRAINING` | Their later questions and answers may become training examples |
+| `WITHDRAW TRAINING` | That stops, and their collected examples are deleted |
+| `WITHDRAW CONSENT` | Both end; they are asked again before the next answer |
+| `MY CONSENT` | Shows what they have agreed to |
+
+## Export and deletion
+
+- **Their own conversations:** each person can export or delete these
+  themselves under Settings, Data Controls.
+- **Everything held about one person:** `./privatellm export-user name@mirah.local`
+  writes their account, conversations, uploads, consent history and training
+  examples to a file in `exports/`. Hand it over, then delete the file.
+- **Remove one person:** `./privatellm delete-user name@mirah.local` asks you to
+  type DELETE, then removes their account, conversations, uploaded files (from
+  the search index too), sign-in keys and sessions, notes and anything else
+  filed under them, consent records and training examples, and clears the
+  built training set.
+
+What deletion does not reach: documents they submitted that a curator approved
+(the command lists them, and `library remove` takes them out), sign-in lines in
+`logs/` and `data/audit.log`, backups you made yourself, export files you
+kept, and a model already trained on their examples.
+
+## Audit trail
+
+`./privatellm audit` lists consent given and withdrawn, access changes,
+approvals and rejections with the curator's name, exports, deletions and
+training runs. It records account ids, never names or email addresses, and
+entries older than a year are deleted.
+
+Sign-ins and changes made in the admin screens are in `data/audit.log`, written
+by the chat software (who did what, not the content of conversations). That
+file is trimmed by size, not by age.
+
+## Adapter training
+
+The plan calls for training a small add-on (an adapter) on what people type,
+only from people who opted in, with identifying details removed and each
+example reviewed. This setup does everything up to the training run itself.
+
+1. People opt in by typing `I AGREE TO TRAINING`. From then on each question
+   and answer is stored with emails, links, long numbers, handles and their own
+   username replaced. Nothing is collected from anyone else, and nothing from
+   the admin, facilitators or Lab leads even if they opt in: their answers can
+   quote restricted documents, and a trained model serves everyone.
+2. Review every example: `./privatellm training list --status pending`, then
+   `./privatellm training approve 3 4 7 --by "Your Name"` or `reject`. The
+   automatic clean-up cannot spot a name inside a sentence, and an answer can
+   quote a restricted document: rejecting those is the reviewer's job.
+3. `./privatellm training build` writes the approved examples to
+   `data/training/train.jsonl` and `valid.jsonl`. Consent is checked again at
+   this point: an approved example is left out if its author has withdrawn, or
+   has not yet agreed to a newer version of the notice.
+4. `./privatellm training run --by "Approver Name"` refuses unless there are at
+   least 500 approved examples (`TRAINING_MIN_EXAMPLES` in `settings.env`) and a
+   trainer is set, then runs the trainer and records who approved the run.
+
+**The trainer is not included and no training run has been tested.** Set
+`TRAIN_COMMAND` in `settings.env` to the program that trains an adapter for
+your model; it is given the folder in `MIRAH_TRAINING_DIR`. That step needs a
+machine with far more memory than a 16 GB Mac, a trainer that matches the
+chosen model, and a way to load the result into Ollama. The plan also requires
+Legal, privacy and (for research) IRB approval before any run; the `--by` name
+records who gave it, it does not replace it.
+
+## Updating an existing install
+
+After `git pull`, run `./privatellm restart` and then `./privatellm configure`.
+The second command adds the access groups, the extra libraries and the consent
+notice. Everyone, you included, is asked to agree before their next answer.
+
 ## Forgotten passwords
 
 There is no "forgot password" link, because the assistant cannot send email.
@@ -148,6 +274,7 @@ There is no "forgot password" link, because the assistant cannot send email.
 | `./privatellm status` | Is it running, and at what address |
 | `./privatellm sync` | Refresh documents |
 | `./privatellm logs` | Watch the logs |
+| `./privatellm access` / `contributor` / `library` / `export-user` / `delete-user` / `audit` / `training` | See the sections above |
 
 The assistant stops when the Mac restarts or sleeps. Run `./privatellm start`
 again, and set the Mac not to sleep (System Settings, Energy).
@@ -188,6 +315,10 @@ again, and set the Mac not to sleep (System Settings, Energy).
 - Open WebUI's outside connections are off: OpenAI and other hosted models, web
   search, community sharing, update checks, cloud drive pickers.
 - Document indexing uses a local model.
+- The chat software's other routes to the model (a pass-through to Ollama and
+  a few helper endpoints) are refused for everyone. They would skip the consent
+  notice, MIRAH's instructions and its libraries.
+- The "memories" feature is off, so there is no second store of personal notes.
 
 These settings stop the software from calling out. They are not a firewall. If
 you need proof for an audit, also block outbound traffic from the Mac.
@@ -201,9 +332,12 @@ curiosity, not against the person who runs the machine. Tell your users.
 
 `tests/test_e2e.sh` runs the whole flow against a stand-in for the model:
 start, configure, sync, a question finding the right document, the document
-text reaching the model, a colleague signing up and being approved, and each
-privacy switch reporting off. It passes on Linux with Open WebUI 0.13.3 and
-oikb 0.6.0.
+text reaching the model, a colleague signing up and being approved, each
+privacy switch reporting off, the consent gate, each access level, the approval
+queue, training-example collection and review, export, deletion and the audit
+trail. `tests/test_store.py` checks the consent and audit records. Both pass on
+Linux with Open WebUI 0.13.3 and oikb 0.6.0.
 
-Not tested: anything on a real Mac, a real model's answers, and the cloud drive
-connectors (they need your accounts). Expect to adjust something on first run.
+Not tested: anything on a real Mac, a real model's answers, an adapter
+training run, and the cloud drive connectors (they need your accounts). Expect
+to adjust something on first run.

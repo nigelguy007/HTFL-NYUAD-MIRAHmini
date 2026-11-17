@@ -37,6 +37,39 @@ REQUEST_TIMEOUT_SECONDS = 60
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 EVERYONE_CAN_READ = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
 
+# Access levels. Everyone approved reads the open libraries; the two libraries
+# below are only searched for members of the named groups. The admin puts
+# people in groups with ./privatellm access.
+FACILITATORS, LEADS, CONTRIBUTORS = "Facilitators", "Lab leads", "Contributors"
+GROUPS: dict[str, tuple[str, dict[str, Any] | None]] = {
+    FACILITATORS: ("May read the Facilitator Library.", None),
+    LEADS: ("May read the Facilitator Library and the Lab Lead Library.", None),
+    # Contributors need the Knowledge page to upload into Submissions.
+    CONTRIBUTORS: ("May submit documents for a curator to approve.", {"workspace": {"knowledge": True}}),
+}
+# level -> (id file, name, description, groups that may read it; None means everyone)
+LEVELS: dict[str, tuple[Path, str, str, tuple[str, ...] | None]] = {
+    "open": (KNOWLEDGE_ID_FILE, KNOWLEDGE_NAME, KNOWLEDGE_DESCRIPTION, None),
+    "facilitators": (
+        RUN_DIR / "facilitators-knowledge-id",
+        "Facilitator Library",
+        "Only facilitators and Lab leads get answers from these documents.",
+        (FACILITATORS, LEADS),
+    ),
+    "leads": (
+        RUN_DIR / "leads-knowledge-id",
+        "Lab Lead Library",
+        "Only Lab leads get answers from these documents.",
+        (LEADS,),
+    ),
+}
+# Documents waiting for a curator. MIRAH never answers from this one.
+SUBMISSIONS_ID_FILE = RUN_DIR / "submissions-knowledge-id"
+SUBMISSIONS_NAME = "Submissions"
+SUBMISSIONS_DESCRIPTION = "Upload here. A curator approves each document before MIRAH can use it."
+GATE_ID = "mirah_gate"
+GATE_FILE = ROOT / "functions" / "mirah_gate.py"
+
 SYSTEM_PROMPT = """You are the private assistant for this team. You run entirely on the team's own computer.
 
 When the message includes context taken from the team's documents:
@@ -127,8 +160,32 @@ def sign_in_or_create_admin(api: Api, name: str, email: str, password: str) -> s
     return result["token"]
 
 
-def ensure_knowledge_base(api: Api, id_file: Path, name: str, description: str) -> dict[str, Any]:
+def ensure_groups(api: Api) -> dict[str, str]:
+    """Creates the access groups that are missing. Returns each group's id by name."""
+    listed = api.request("GET", "/api/v1/groups/")
+    existing = {group["name"]: group["id"] for group in (listed.get("items", []) if isinstance(listed, dict) else listed)}
+    for name, (description, permissions) in GROUPS.items():
+        if name in existing:
+            continue
+        form = {"name": name, "description": description, "permissions": permissions}
+        existing[name] = api.request("POST", "/api/v1/groups/create", form)["id"]
+        print(f"Created the group '{name}'.")
+    return existing
+
+
+def group_grants(group_ids: dict[str, str], names: tuple[str, ...], permissions: tuple[str, ...] = ("read",)) -> list[dict[str, str]]:
+    return [
+        {"principal_type": "group", "principal_id": group_ids[name], "permission": permission}
+        for name in names
+        for permission in permissions
+    ]
+
+
+def ensure_knowledge_base(
+    api: Api, id_file: Path, name: str, description: str, grants: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
     """Returns the knowledge base whose id is saved in id_file, creating it if needed."""
+    grants = EVERYONE_CAN_READ if grants is None else grants
     if id_file.exists():
         try:
             existing = api.request("GET", f"/api/v1/knowledge/{id_file.read_text().strip()}")
@@ -140,7 +197,7 @@ def ensure_knowledge_base(api: Api, id_file: Path, name: str, description: str) 
     created = api.request(
         "POST",
         "/api/v1/knowledge/create",
-        {"name": name, "description": description, "access_grants": EVERYONE_CAN_READ},
+        {"name": name, "description": description, "access_grants": grants},
     )
     id_file.write_text(created["id"] + "\n")
     print(f"Created knowledge base '{name}'.")
@@ -228,6 +285,29 @@ def ensure_assistant(
         print(f"Updated the '{name}' model (now on {chat_model}).")
 
 
+def ensure_gate(api: Api) -> None:
+    """Installs the consent filter and switches it on for every model."""
+    form = {
+        "id": GATE_ID,
+        "name": "MIRAH consent gate",
+        "content": GATE_FILE.read_text(encoding="utf-8"),
+        "meta": {"description": "Asks for consent before the first question and records it."},
+    }
+    try:
+        api.request("POST", "/api/v1/functions/create", form)
+        print("Installed the consent gate.")
+    except ApiError as error:
+        if error.status != 400:
+            raise
+        api.request("POST", f"/api/v1/functions/id/{GATE_ID}/update", form)
+        print("Updated the consent gate.")
+    state = api.request("GET", f"/api/v1/functions/id/{GATE_ID}")
+    if not state.get("is_active"):
+        api.request("POST", f"/api/v1/functions/id/{GATE_ID}/toggle")
+    if not state.get("is_global"):
+        api.request("POST", f"/api/v1/functions/id/{GATE_ID}/toggle/global")
+
+
 def ensure_api_key(api: Api) -> None:
     if API_KEY_FILE.exists() and API_KEY_FILE.stat().st_size > 0:
         print("Sync API key already saved.")
@@ -249,13 +329,31 @@ def main() -> None:
     name, email, password = read_credentials()
     api = Api(base_url)
     api.token = sign_in_or_create_admin(api, name, email, password)
-    uploads = ensure_knowledge_base(api, KNOWLEDGE_ID_FILE, KNOWLEDGE_NAME, KNOWLEDGE_DESCRIPTION)
-    synced = ensure_knowledge_base(api, SYNC_KNOWLEDGE_ID_FILE, SYNC_KNOWLEDGE_NAME, SYNC_KNOWLEDGE_DESCRIPTION)
-    ensure_assistant(api, [uploads, synced], chat_model)
+    group_ids = ensure_groups(api)
+    # One MIRAH for everyone: the chat software leaves out, per person, any
+    # attached library that person has no right to read.
+    libraries = [
+        ensure_knowledge_base(
+            api, id_file, level_name, description, None if readers is None else group_grants(group_ids, readers)
+        )
+        for id_file, level_name, description, readers in LEVELS.values()
+    ]
+    libraries.append(
+        ensure_knowledge_base(api, SYNC_KNOWLEDGE_ID_FILE, SYNC_KNOWLEDGE_NAME, SYNC_KNOWLEDGE_DESCRIPTION)
+    )
+    ensure_knowledge_base(
+        api,
+        SUBMISSIONS_ID_FILE,
+        SUBMISSIONS_NAME,
+        SUBMISSIONS_DESCRIPTION,
+        group_grants(group_ids, (CONTRIBUTORS,), ("read", "write")),
+    )
+    ensure_gate(api)
+    ensure_assistant(api, libraries, chat_model)
     for suffix, label, instructions in STAGES:
         ensure_assistant(
             api,
-            [uploads, synced],
+            libraries,
             chat_model,
             model_id=f"{ASSISTANT_ID}-{suffix}",
             name=f"{ASSISTANT_NAME} · {label}",

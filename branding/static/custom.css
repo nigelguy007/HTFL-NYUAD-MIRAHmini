@@ -205,3 +205,17 @@ div:has(> #sidebar)::after {
 @media (max-width: 900px) {
   div:has(> #sidebar)::after { display: none; }
 }
+
+/* --- Notices from MIRAH itself (the consent notice and its replies) ----------
+   The chat software shows them in its small grey information box, as one
+   paragraph. Keep the notice's line breaks and give it readable contrast. */
+#response-content-container > div.items-start.rounded-2xl > div.break-words {
+  white-space: pre-line;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-gray-800);
+}
+
+.dark #response-content-container > div.items-start.rounded-2xl > div.break-words {
+  color: var(--color-gray-100);
+}

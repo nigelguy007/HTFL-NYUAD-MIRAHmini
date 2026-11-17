@@ -4,6 +4,7 @@ data/
 run/
 logs/
 models/
+exports/
 apps/
 bin/
 sync/sources.yaml

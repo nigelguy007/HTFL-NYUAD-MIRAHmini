@@ -1,0 +1,19 @@
+Version: 1
+
+Before you use MIRAH, please read this.
+
+- MIRAH runs on a computer operated by the Lab. Nothing you type is sent to an outside company.
+- Your questions and MIRAH's answers are stored on that computer under the username you chose.
+- The person who operates the computer is technically able to read stored conversations.
+- Do not type personal details about yourself or about anyone else.
+- MIRAH can be wrong. Check anything important against the source it names.
+- You can export or delete your conversations yourself under Settings, Data Controls. You can ask the Lab to export or delete your whole account at any time.
+- Your conversations are NOT used to train MIRAH unless you separately choose to allow it.
+
+To agree and continue, type:  I AGREE
+
+Other things you can type at any time:
+- I AGREE TO TRAINING: allow your future questions and answers, with identifying details removed and after a person has reviewed them, to be used to improve MIRAH.
+- WITHDRAW TRAINING: stop that, and delete the examples already collected from you.
+- WITHDRAW CONSENT: withdraw your agreement altogether. You will not be able to use MIRAH until you agree again.
+- MY CONSENT: show what you have agreed to.

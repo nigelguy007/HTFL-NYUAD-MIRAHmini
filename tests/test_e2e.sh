@@ -23,7 +23,8 @@ fake_pid=""
 cleanup() {
   [[ -x "$APP/privatellm" ]] && "$APP/privatellm" stop >/dev/null 2>&1 || true
   [[ -n "$fake_pid" ]] && kill "$fake_pid" 2>/dev/null || true
-  rm -rf "$WORK"
+  # KEEP_WORK=1 leaves the test's files in place, to look at after a failure.
+  if [[ -n "${KEEP_WORK:-}" ]]; then echo "Kept $WORK"; else rm -rf "$WORK"; fi
 }
 trap cleanup EXIT
 
@@ -50,7 +51,7 @@ ask() {
 finds() {
   ask "$1" | python3 -c "
 import json, sys
-tops = [source['metadata'][0]['name'] for source in json.load(sys.stdin)['sources']]
+tops = [source['metadata'][0]['name'] for source in json.load(sys.stdin)['sources'] if source['metadata']]
 sys.exit(0 if sys.argv[1] in tops else 1)" "$2"
 }
 
@@ -80,17 +81,36 @@ colleague_ask_status() {
     -d '{"model":"assistant","stream":false,"messages":[{"role":"user","content":"When does the Zanzibar office open?"}]}'
 }
 
-approve_colleague() {
-  local admin_token colleague_id
+# approve_user <email> <password> <name>: the admin lets a new sign-up in.
+approve_user() {
+  local admin_token user_id
   admin_token="$(login "$ADMIN_EMAIL" "$ADMIN_PASSWORD")"
-  colleague_id="$(login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD" id)"
-  post_json "/api/v1/users/$colleague_id/update" \
-    "{\"role\":\"user\",\"name\":\"Colleague\",\"email\":\"$COLLEAGUE_EMAIL\",\"profile_image_url\":\"/user.png\"}" "$admin_token" | field role
+  user_id="$(login "$1" "$2" id)"
+  post_json "/api/v1/users/$user_id/update" \
+    "{\"role\":\"user\",\"name\":\"$3\",\"email\":\"$1\",\"profile_image_url\":\"/user.png\"}" "$admin_token" | field role
 }
+approve_colleague() { approve_user "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD" "Colleague"; }
+colleague_token()   { login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD"; }
+
+# say <token> <text>: what MIRAH (or the consent gate) sends back. Never fails.
+say() {
+  curl -s -X POST "$BASE/api/chat/completions" -H "Authorization: Bearer $1" -H "Content-Type: application/json" \
+    -d "{\"model\":\"assistant\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"$2\"}]}"
+}
+# upload <token> <file> <knowledge id file>: prints the HTTP status.
+upload() {
+  curl -s -o "$WORK/upload.json" -w '%{http_code}' -X POST "$BASE/api/v1/files/" -H "Authorization: Bearer $1" \
+    -F "file=@$2" -F "metadata={\"knowledge_id\":\"$(cat "$APP/run/$3")\"}"
+}
+admin_token() { cat "$APP/run/api-key"; }
+# replies <pattern> <token> <text>: true if the reply contains the pattern. Shows the reply if not.
+replies() { say "$2" "$3" > "$WORK/reply.json"; grep -q -- "$1" "$WORK/reply.json" || { cut -c1-700 "$WORK/reply.json"; return 1; }; }
+# lacks <pattern> <token> <text>: true if the reply does not contain the pattern.
+lacks()   { say "$2" "$3" > "$WORK/reply.json"; ! grep -q -- "$1" "$WORK/reply.json"; }
 
 # --- Arrange: a private copy of the project, test documents, the stand-in ----
 mkdir -p "$APP" "$DOCS/policies"
-cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$SOURCE_ROOT/sync" "$SOURCE_ROOT/branding" "$SOURCE_ROOT/skills" "$APP/"
+cp -R "$SOURCE_ROOT/privatellm" "$SOURCE_ROOT/config" "$SOURCE_ROOT/scripts" "$SOURCE_ROOT/sync" "$SOURCE_ROOT/branding" "$SOURCE_ROOT/skills" "$SOURCE_ROOT/functions" "$APP/"
 cat > "$APP/settings.env" <<EOF
 CHAT_MODEL=test-chat
 EMBED_MODEL=test-embed
@@ -119,6 +139,10 @@ check "configure creates everything"   "$APP/privatellm" configure
 check "open to network after setup"    grep -q "From other devices" <("$APP/privatellm" status)
 check "configure can be run again"     "$APP/privatellm" configure
 check "api key file is private"        test "$(stat -c %a "$APP/run/api-key" 2>/dev/null || stat -f %Lp "$APP/run/api-key")" = "600"
+
+# Nobody, the admin included, gets an answer before agreeing to the notice.
+check "a question waits for agreement" replies "Before you use MIRAH" "$(admin_token)" "When does the Zanzibar office open?"
+check "typing I agree is recorded"     replies "Your agreement was recorded" "$(admin_token)" "I agree"
 
 # A document uploaded by hand must survive every sync.
 printf 'The hand-uploaded note says the spare key is in the blue tin.\n' > "$WORK/hand-note.txt"
@@ -182,6 +206,8 @@ signup_role="$(post_json /api/v1/auths/signup "{\"name\":\"Colleague\",\"email\"
 check "new signup waits for approval"  test "$signup_role" = "pending"
 check "unapproved user is locked out"  test "$(colleague_ask_status)" = "401"
 check "admin can approve"              test "$(approve_colleague)" = "user"
+check "approved user must agree first" test "$(colleague_ask_status)" = "400"
+say "$(colleague_token)" "I AGREE." >/dev/null
 check "approved user gets an answer"   test "$(colleague_ask_status)" = "200"
 check "their answer uses the document" grep -q "09:15" "$WORK/colleague.json"
 
@@ -220,6 +246,144 @@ curl -s -o "$WORK/no-skill-chat.json" -X POST "$BASE/api/chat/completions" \
   -H "Authorization: Bearer $(login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD")" -H "Content-Type: application/json" \
   -d '{"model":"assistant","stream":false,"messages":[{"role":"user","content":"Hello"}]}'
 check "it stays out of other chats"    bash -c "! grep -q 'green heron' '$WORK/no-skill-chat.json'"
+
+# Signing in is rate-limited, so each person signs in once here and the session is reused.
+COLLEAGUE_TOKEN="$(colleague_token)"
+# --- Side routes to the model, which would skip the consent gate, are closed --------
+side_route() { curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE$1" -H "Authorization: Bearer $COLLEAGUE_TOKEN" -H "Content-Type: application/json" -d "$2"; }
+check "Ollama pass-through is closed"  test "$(side_route /ollama/api/chat '{"model":"test-chat","stream":false,"messages":[{"role":"user","content":"hi"}]}')" = "403"
+check "numbered pass-through is closed" test "$(side_route /ollama/api/chat/0 '{"model":"test-chat","stream":false,"messages":[{"role":"user","content":"hi"}]}')" = "403"
+check "helper endpoints are closed"    test "$(side_route /api/v1/tasks/emoji/completions '{"model":"assistant","prompt":"hi"}')$(side_route /api/v1/tasks/moa/completions '{"model":"assistant","prompt":"hi","responses":["a"]}')" = "403403"
+post_json /api/v1/auths/signup '{"name":"Newcomer","email":"new-comer@mirah.local","password":"Newcomer-passw0rd-1!"}' >/dev/null
+approve_user "new-comer@mirah.local" "Newcomer-passw0rd-1!" "Newcomer" >/dev/null
+NEWCOMER_TOKEN="$(login "new-comer@mirah.local" "Newcomer-passw0rd-1!")"
+curl -s -o "$WORK/base.json" -X POST "$BASE/api/chat/completions" -H "Authorization: Bearer $NEWCOMER_TOKEN" -H "Content-Type: application/json" \
+  -d '{"model":"test-chat","stream":false,"messages":[{"role":"user","content":"hi"}]}'
+check "the hidden base model is gated too" grep -q "Before you use MIRAH" "$WORK/base.json"
+
+# --- Access levels: one MIRAH, different libraries per person -----------------------
+printf 'The facilitator budget code is TANGERINE-77.\n' > "$WORK/facilitator-note.txt"
+printf 'The Lab lead succession plan is codenamed MARIGOLD-12.\n' > "$WORK/lead-note.txt"
+upload "$(admin_token)" "$WORK/facilitator-note.txt" facilitators-knowledge-id >/dev/null
+upload "$(admin_token)" "$WORK/lead-note.txt" leads-knowledge-id >/dev/null
+sleep 8
+BUDGET='What is the facilitator budget code?'
+PLAN='What is the Lab lead succession plan codenamed?'
+check "open level: no facilitator text" lacks TANGERINE "$COLLEAGUE_TOKEN" "$BUDGET"
+check "access command sets a level"    grep -q "'facilitators' access level" <("$APP/privatellm" access "$COLLEAGUE_EMAIL" facilitators)
+check "facilitator sees facilitator text" replies TANGERINE "$COLLEAGUE_TOKEN" "$BUDGET"
+check "facilitator sees no Lab lead text" lacks MARIGOLD "$COLLEAGUE_TOKEN" "$PLAN"
+"$APP/privatellm" access "$COLLEAGUE_EMAIL" leads >/dev/null
+check "Lab lead sees facilitator text" replies TANGERINE "$COLLEAGUE_TOKEN" "$BUDGET"
+check "Lab lead sees Lab lead text"    replies MARIGOLD "$COLLEAGUE_TOKEN" "$PLAN"
+"$APP/privatellm" access "$COLLEAGUE_EMAIL" open >/dev/null
+check "back to open: no facilitator text" lacks TANGERINE "$COLLEAGUE_TOKEN" "$BUDGET"
+check "back to open: no Lab lead text" lacks MARIGOLD "$COLLEAGUE_TOKEN" "$PLAN"
+
+# --- Curator approval: a submission is not searchable until approved -----------------
+WRITER_EMAIL="quiet-heron@mirah.local"; WRITER_PASSWORD="Writer-passw0rd-321!"
+post_json /api/v1/auths/signup "{\"name\":\"Writer\",\"email\":\"$WRITER_EMAIL\",\"password\":\"$WRITER_PASSWORD\"}" >/dev/null
+approve_user "$WRITER_EMAIL" "$WRITER_PASSWORD" "Writer" >/dev/null
+WRITER_TOKEN="$(login "$WRITER_EMAIL" "$WRITER_PASSWORD")"
+WRITER_ID="$(curl -fsS -H "Authorization: Bearer $WRITER_TOKEN" "$BASE/api/v1/auths/" | field id)"
+printf 'The workshop mascot is a QUOKKA named Pebble.\n' > "$WORK/submission.txt"
+check "non-contributor cannot submit"  bash -c "[[ '$(upload "$WRITER_TOKEN" "$WORK/submission.txt" submissions-knowledge-id)' != 200 ]] || ! grep -q submission.txt <('$APP/privatellm' library pending)"
+"$APP/privatellm" contributor "$WRITER_EMAIL" yes >/dev/null
+check "contributor can submit"         test "$(upload "$WRITER_TOKEN" "$WORK/submission.txt" submissions-knowledge-id)" = "200"
+sleep 8
+"$APP/privatellm" library pending > "$WORK/pending.log" 2>&1 || true
+check "it waits in the queue"          grep -q "submission.txt" "$WORK/pending.log"
+SUBMISSION_ID="$(grep submission.txt "$WORK/pending.log" | tail -n 1 | cut -d' ' -f1)"
+MASCOT='What is the workshop mascot?'
+check "a curator can read it first"    grep -q "QUOKKA" <("$APP/privatellm" library show "$SUBMISSION_ID")
+check "unapproved text is not used"    lacks QUOKKA "$COLLEAGUE_TOKEN" "$MASCOT"
+check "approval needs a named curator" bash -c "! '$APP/privatellm' library approve '$SUBMISSION_ID' >/dev/null 2>&1"
+"$APP/privatellm" library approve "$SUBMISSION_ID" --level open --by "Test Curator" > "$WORK/approve.log" 2>&1 || true
+check "a curator approves it"          grep -q "Approved into" "$WORK/approve.log"
+APPROVED_ID="$(grep "Approved into" "$WORK/approve.log" | sed 's/.* as \([^.]*\)\..*/\1/')"
+sleep 8
+check "the submitter's own copy is gone" test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(admin_token)" "$BASE/api/v1/files/$SUBMISSION_ID")" = "404"
+check "the submitter cannot change it" bash -c "[[ '$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/files/$APPROVED_ID/data/content/update" -H "Authorization: Bearer $WRITER_TOKEN" -H "Content-Type: application/json" -d '{"content":"tampered"}')' != 200 ]]"
+check "approved text is used at once"  replies QUOKKA "$COLLEAGUE_TOKEN" "$MASCOT"
+check "the queue is empty again"       grep -q "Nothing is waiting" <("$APP/privatellm" library pending)
+check "a curator removes it"           grep -q "no longer answers" <("$APP/privatellm" library remove "$APPROVED_ID" --by "Test Curator")
+check "removed text is gone"           lacks QUOKKA "$COLLEAGUE_TOKEN" "$MASCOT"
+printf 'A rejected note about ZEPPELIN parking.\n' > "$WORK/reject-me.txt"
+upload "$WRITER_TOKEN" "$WORK/reject-me.txt" submissions-knowledge-id >/dev/null
+sleep 5
+REJECT_ID="$("$APP/privatellm" library pending | grep reject-me.txt | cut -d' ' -f1)"
+check "a curator rejects one"          grep -q "Rejected" <("$APP/privatellm" library reject "$REJECT_ID" --by "Test Curator")
+check "rejected file is deleted"       test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(admin_token)" "$BASE/api/v1/files/$REJECT_ID")" = "404"
+
+# --- Training examples: opt-in, scrubbed, reviewed, and a gated training run --------
+say "$COLLEAGUE_TOKEN" "Summarise the parking policy" >/dev/null
+check "no opt-in, nothing is collected" grep -q "^0 example" <("$APP/privatellm" training list)
+check "training opt-in is recorded"    replies "may be used to improve" "$COLLEAGUE_TOKEN" "I agree to training"
+say "$COLLEAGUE_TOKEN" "Write to jo@example.org about the Colleague parking permit" >/dev/null
+"$APP/privatellm" training list > "$WORK/examples.log" 2>&1 || true
+check "an example is collected"        grep -q "^1 example" "$WORK/examples.log"
+"$APP/privatellm" access "$COLLEAGUE_EMAIL" facilitators >/dev/null
+say "$COLLEAGUE_TOKEN" "What is the facilitator budget code?" >/dev/null
+check "nothing is collected from a facilitator" grep -q "^1 example" <("$APP/privatellm" training list)
+"$APP/privatellm" access "$COLLEAGUE_EMAIL" open >/dev/null
+say "$(admin_token)" "I agree to training" >/dev/null; say "$(admin_token)" "What is the Lab lead succession plan codenamed?" >/dev/null
+check "nothing is collected from the admin" grep -q "^1 example" <("$APP/privatellm" training list)
+check "its email address is removed"   bash -c "grep -q '\[EMAIL\]' '$WORK/examples.log' && ! grep -q 'jo@example.org' '$WORK/examples.log'"
+check "the person's own name is removed" grep -q "\[NAME\] parking" "$WORK/examples.log"
+check "no document text is copied in"  bash -c "! grep -q 'Respond to the user query' '$WORK/examples.log'"
+check "it starts unreviewed"           grep -q "pending" "$WORK/examples.log"
+check "review needs a named reviewer"  bash -c "! '$APP/privatellm' training approve 1 >/dev/null 2>&1"
+check "a reviewer approves it"         grep -q "Example 1: approved" <("$APP/privatellm" training approve 1 --by "Test Reviewer")
+check "the training set is built"      grep -q "Wrote 1 approved" <("$APP/privatellm" training build)
+check "training set holds the example" grep -q '"role": "assistant"' "$APP/data/training/train.jsonl"
+check "too few examples: no training"  grep -q "at least 500" <("$APP/privatellm" training run --by "Test Approver" 2>&1)
+check "no trainer set: no training"    grep -q "TRAIN_COMMAND is not set" <(TRAINING_MIN_EXAMPLES=1 "$APP/privatellm" training run --by "Test Approver" 2>&1)
+check "training needs a named approver" bash -c "! TRAINING_MIN_EXAMPLES=1 '$APP/privatellm' training run >/dev/null 2>&1"
+printf '#!/bin/sh\nwc -l < "$MIRAH_TRAINING_DIR/train.jsonl" > "$1"\n' > "$WORK/trainer.sh"
+TRAINING_MIN_EXAMPLES=1 TRAIN_COMMAND="sh $WORK/trainer.sh $WORK/trained.txt" "$APP/privatellm" training run --by "Test Approver" > "$WORK/train.log" 2>&1 || true
+check "the trainer is handed the set"  test "$(tr -d ' ' < "$WORK/trained.txt")" = "1"
+check "withdrawing deletes the examples" replies "1 example(s) collected from you were deleted" "$COLLEAGUE_TOKEN" "Withdraw training"
+check "and the built training set"     test ! -e "$APP/data/training/train.jsonl"
+
+# --- Export, deletion and the audit trail ---------------------------------------------
+# Questions sent straight to the API are not kept; the browser saves each conversation like this.
+check "a conversation is saved"        test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/chats/new" -H "Authorization: Bearer $COLLEAGUE_TOKEN" -H "Content-Type: application/json" \
+  -d '{"chat":{"title":"Office hours","messages":[{"role":"user","content":"When does the Zanzibar office open?"}]}}')" = "200"
+"$APP/privatellm" export-user "$COLLEAGUE_EMAIL" > "$WORK/export.log" 2>&1 || true
+EXPORT_FILE="$(ls "$APP"/exports/*.json 2>/dev/null | head -n 1)"
+check "export holds their conversations" grep -q "Zanzibar" "$EXPORT_FILE"
+check "export holds their other records" grep -q '"other_records"' "$EXPORT_FILE"
+check "export holds their consent"     grep -q '"purpose": "training"' "$EXPORT_FILE"
+check "export file is private"         test "$(stat -c %a "$EXPORT_FILE" 2>/dev/null || stat -f %Lp "$EXPORT_FILE")" = "600"
+check "the admin cannot be deleted"    grep -q "cannot be deleted" <("$APP/privatellm" delete-user "$ADMIN_EMAIL" --yes 2>&1)
+check "deletion asks first"            grep -q "Nothing was deleted" <(echo no | "$APP/privatellm" delete-user "$WRITER_EMAIL" 2>&1)
+COLLEAGUE_ID="$(curl -fsS -H "Authorization: Bearer $COLLEAGUE_TOKEN" "$BASE/api/v1/auths/" | field id)"
+curl -s -o /dev/null -X POST "$BASE/api/v1/auths/api_key" -H "Authorization: Bearer $COLLEAGUE_TOKEN"
+"$APP/privatellm" delete-user "$COLLEAGUE_EMAIL" --yes > "$WORK/delete.log" 2>&1 || true
+check "no row anywhere still names them" test "$(python3 -c "
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1]); total = 0
+for (table,) in db.execute(\"select name from sqlite_master where type='table'\").fetchall():
+    if any(c[1] == 'user_id' for c in db.execute(f'pragma table_info(\"{table}\")')):
+        total += db.execute(f'select count(*) from \"{table}\" where user_id = ?', (sys.argv[2],)).fetchone()[0]
+print(total + db.execute('select count(*) from user where id = ?', (sys.argv[2],)).fetchone()[0] + db.execute('select count(*) from auth where id = ?', (sys.argv[2],)).fetchone()[0])" "$APP/data/webui.db" "$COLLEAGUE_ID")" = "0"
+check "deletion reports what went"     grep -q "consent record(s)" "$WORK/delete.log"
+check "a deleted person cannot sign in" test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/auths/signin" -H "Content-Type: application/json" -d "{\"email\":\"$COLLEAGUE_EMAIL\",\"password\":\"$COLLEAGUE_PASSWORD\"}")" = "400"
+check "their old session stops working" test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $COLLEAGUE_TOKEN" "$BASE/api/v1/chats/")" = "401"
+check "their conversations are gone"   test "$(python3 -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute('select count(*) from chat c left join user u on u.id=c.user_id where u.id is null').fetchone()[0])" "$APP/data/webui.db")" = "0"
+check "their consent records are gone" test "$(python3 -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute('select count(*) from consent where user_id not in (?, ?)', sys.argv[2:4]).fetchone()[0])" "$APP/data/mirah.db" "$(login "$ADMIN_EMAIL" "$ADMIN_PASSWORD" id)" "$WRITER_ID")" = "0"
+"$APP/privatellm" audit > "$WORK/audit.log" 2>&1 || true
+check "audit shows consent"            grep -q "consent.granted.use" "$WORK/audit.log"
+check "audit shows the approval"       grep -q "Test Curator  library.approved" "$WORK/audit.log"
+check "audit shows the deletion"       grep -q "user.deleted" "$WORK/audit.log"
+check "audit holds no email address"   bash -c "! grep -q '@' <(grep -v 'audit.log' '$WORK/audit.log')"
+check "browser actions are logged too" test -s "$APP/data/audit.log"
+
+# --- A new version of the notice asks everyone again ---------------------------------
+say "$WRITER_TOKEN" "I agree" >/dev/null
+check "writer can ask after agreeing"  replies '"choices"' "$WRITER_TOKEN" "Hello"
+sed -i.bak '1s/.*/Version: 2/' "$APP/config/consent-notice.txt"
+check "a new notice version asks again" replies "Before you use MIRAH" "$WRITER_TOKEN" "Hello"
 
 echo
 if (( failures == 0 )); then
