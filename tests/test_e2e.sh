@@ -133,7 +133,10 @@ fake_pid=$!
 sleep 1
 
 # --- Act and assert -----------------------------------------------------------
-check "starts"                         "$APP/privatellm" start
+"$APP/privatellm" start >"$WORK/start.log" 2>&1
+check "starts"                         grep -q "Open WebUI: running" "$WORK/start.log"
+check "start preloads the chat model"  grep -q "into memory" "$WORK/start.log"
+check "no missing-model warning"       bash -c "! grep -q 'does not have' '$WORK/start.log'"
 check "closed to network before setup" grep -q "Other devices are blocked" <("$APP/privatellm" status)
 check "configure creates everything"   "$APP/privatellm" configure
 check "open to network after setup"    grep -q "From other devices" <("$APP/privatellm" status)

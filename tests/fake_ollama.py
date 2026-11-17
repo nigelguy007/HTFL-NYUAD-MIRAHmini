@@ -103,6 +103,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"embedding": embed(body.get("prompt", ""))})
         if self.path == "/api/chat":
             return self.chat(body)
+        if self.path == "/api/generate":
+            # An empty prompt only loads the model, as the launcher's warm-up does.
+            return self.send_json({"model": body.get("model"), "response": "", "done": True})
         return self.send_json({"error": f"fake ollama: no POST {self.path}"}, 404)
 
     def chat(self, body):

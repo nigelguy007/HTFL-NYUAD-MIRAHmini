@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the private assistant: Ollama (the model) and Open WebUI (the chat site).
-#   ./privatellm start | stop | restart | status | configure | sync | skills | reset-password | reindex | logs
+#   ./privatellm start | stop | restart | status | doctor | pull | configure | sync | skills | reset-password | reindex | logs
 #   ./privatellm access | contributor | library | export-user | delete-user | audit | training
 set -euo pipefail
 
@@ -13,6 +13,10 @@ BRAND_DIR="$ROOT/branding"
 OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
 START_TIMEOUT_SECONDS=180
 STOP_TIMEOUT_SECONDS=30
+# Loading a model of several GB from an external drive can take a few minutes.
+WARM_UP_TIMEOUT_SECONDS=300
+# Below this much free memory, macOS starts swapping and the Mac can freeze.
+LOW_MEMORY_PERCENT=25
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -81,6 +85,9 @@ start_ollama() {
   # 127.0.0.1: only Open WebUI on this machine may talk to the model directly.
   # Keep the chat and search models in memory for good: reloading several GB
   # (slow from an external drive) is the longest wait there is.
+  # Memory: flash attention and an 8-bit conversation cache roughly halve what
+  # each conversation takes, which matters most on a 16 GB Mac. Both can be
+  # overridden in settings.env.
   OLLAMA_HOST="${OLLAMA_URL#http://}" \
   OLLAMA_MODELS="$MODELS_DIR" \
   OLLAMA_NO_CLOUD=1 \
@@ -88,9 +95,100 @@ start_ollama() {
   OLLAMA_KEEP_ALIVE=-1 \
   OLLAMA_MAX_LOADED_MODELS=2 \
   OLLAMA_NUM_PARALLEL="${PARALLEL_CHATS:-1}" \
+  OLLAMA_FLASH_ATTENTION="${OLLAMA_FLASH_ATTENTION:-1}" \
+  OLLAMA_KV_CACHE_TYPE="${OLLAMA_KV_CACHE_TYPE:-q8_0}" \
     nohup ollama serve >"$LOG_DIR/ollama.log" 2>&1 &
   echo $! >"$RUN_DIR/ollama.pid"
   wait_for "$OLLAMA_URL/api/version" "Ollama" ollama
+}
+
+# model_installed <name>: true if Ollama has it. A name without a tag is ":latest".
+model_installed() {
+  local tags
+  tags="$(curl -fs --max-time 10 "$OLLAMA_URL/api/tags" 2>/dev/null | tr -d ' \n')" || return 1
+  grep -qF "\"name\":\"$1\"" <<<"$tags" && return 0
+  [[ "$1" == *:* ]] || grep -qF "\"name\":\"$1:latest\"" <<<"$tags"
+}
+
+# Without these the chat says "Model not found" and uploads fail.
+check_models() {
+  local missing=() name
+  for name in "$CHAT_MODEL" "$EMBED_MODEL"; do
+    model_installed "$name" || missing+=("$name")
+  done
+  (( ${#missing[@]} == 0 )) && return 0
+  echo "WARNING: Ollama does not have: ${missing[*]}"
+  echo "  Chats will fail with 'Model not found' until you run: ./privatellm pull"
+  return 1
+}
+
+# Loads both models now, so the first question does not wait for 6 GB to be
+# read from the drive while Open WebUI looks frozen.
+warm_up() {
+  check_models || return 0
+  echo "Loading $CHAT_MODEL into memory (up to a few minutes from an external drive)..."
+  curl -fs --max-time "$WARM_UP_TIMEOUT_SECONDS" -o /dev/null "$OLLAMA_URL/api/generate" \
+    -d "{\"model\":\"$CHAT_MODEL\",\"keep_alive\":-1}" \
+    || echo "Note: could not preload $CHAT_MODEL, so the first answer will be slow. See $LOG_DIR/ollama.log."
+  curl -fs --max-time "$WARM_UP_TIMEOUT_SECONDS" -o /dev/null "$OLLAMA_URL/api/embed" \
+    -d "{\"model\":\"$EMBED_MODEL\",\"input\":\"warm up\",\"keep_alive\":-1}" \
+    || echo "Note: could not preload $EMBED_MODEL. See $LOG_DIR/ollama.log."
+}
+
+# Percentage of memory macOS reports as free (the same figure as Activity
+# Monitor's memory pressure). Prints nothing on other systems.
+free_memory_percent() {
+  sysctl -n kern.memorystatus_level 2>/dev/null || true
+}
+
+# The programs using the most memory, helpers added together (Chrome runs as many).
+biggest_memory_users() {
+  ps -axo rss=,ucomm= 2>/dev/null \
+    | awk '{ kb = $1; $1 = ""; sub(/^ +/, ""); total[$0] += kb }
+           END { for (name in total) printf "%d %s\n", total[name] / 1024, name }' \
+    | sort -rn | head -5 | awk '{ size = $1; $1 = ""; printf "    %6d MB %s\n", size, $0 }' || true
+}
+
+# warn_if_low_memory [always]: warns when the Mac is short of memory.
+warn_if_low_memory() {
+  local free
+  free="$(free_memory_percent)"
+  [[ "$free" =~ ^[0-9]+$ ]] || return 0
+  if (( free < LOW_MEMORY_PERCENT )); then
+    echo "WARNING: only $free% of memory is free. The Mac may freeze while MIRAH answers."
+    echo "  Close other apps, Chrome tabs especially. Using the most memory now:"
+    biggest_memory_users
+  elif [[ "${1:-}" == "always" ]]; then
+    echo "Memory free: $free%. Using the most memory now:"
+    biggest_memory_users
+  fi
+}
+
+# What is loaded, how big, and whether memory is short.
+run_doctor() {
+  show_status
+  echo
+  if is_up "$OLLAMA_URL/api/version"; then
+    check_models && echo "Both models are installed: $CHAT_MODEL and $EMBED_MODEL."
+    echo "Loaded in memory now:"
+    OLLAMA_HOST="${OLLAMA_URL#http://}" ollama ps 2>/dev/null || echo "  (could not ask Ollama)"
+  fi
+  echo
+  warn_if_low_memory always
+  echo
+  echo "If the Mac still freezes with other apps closed, in settings.env:"
+  echo "  1. PARALLEL_CHATS=1 (one answer at a time; others wait in turn)"
+  echo "  2. CONTEXT_LENGTH=4096 (answers draw on fewer document excerpts)"
+  echo "  3. a smaller CHAT_MODEL, then ./privatellm pull and ./privatellm configure"
+  echo "  then ./privatellm restart"
+}
+
+# Downloads the chat and search models named in settings.env into MODELS_DIR.
+run_pull() {
+  start_ollama
+  OLLAMA_HOST="${OLLAMA_URL#http://}" ollama pull "$CHAT_MODEL"
+  OLLAMA_HOST="${OLLAMA_URL#http://}" ollama pull "$EMBED_MODEL"
+  check_models && echo "Both models are installed. Run ./privatellm restart."
 }
 
 configured() { [[ -s "$RUN_DIR/api-key" ]]; }
@@ -286,11 +384,13 @@ main() {
   shift || true
   load_settings
   case "$command" in
-    start)        start_ollama; start_webui; show_status ;;
+    start)        start_ollama; warm_up; warn_if_low_memory; start_webui; show_status ;;
     start-ollama) start_ollama ;;
     stop)         stop_one webui; stop_one ollama ;;
-    restart)      stop_one webui; stop_one ollama; start_ollama; start_webui; show_status ;;
+    restart)      stop_one webui; stop_one ollama; start_ollama; warm_up; warn_if_low_memory; start_webui; show_status ;;
     status)       show_status ;;
+    doctor)       run_doctor ;;
+    pull)         run_pull ;;
     configure)    run_configure "$@" ;;
     sync)         run_sync "$@" ;;
     reset-password) run_reset_password ;;
@@ -298,7 +398,7 @@ main() {
     skills)       WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/import_skills.py" ;;
     logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
     access|contributor|library|export-user|delete-user|audit|training) run_govern "$command" "$@" ;;
-    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, reset-password, reindex, logs, access, contributor, library, export-user, delete-user, audit, training." ;;
+    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, doctor, pull, configure, sync, skills, reset-password, reindex, logs, access, contributor, library, export-user, delete-user, audit, training." ;;
   esac
 }
 

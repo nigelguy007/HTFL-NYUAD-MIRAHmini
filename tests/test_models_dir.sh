@@ -23,6 +23,7 @@ mkdir -p "$WORK/bin"
 {
   echo '#!/usr/bin/env bash'
   echo "printf '%s' \"\${OLLAMA_MODELS:-unset}\" > \"$WORK/recorded\""
+  echo "printf '%s %s' \"\${OLLAMA_FLASH_ATTENTION:-unset}\" \"\${OLLAMA_KV_CACHE_TYPE:-unset}\" > \"$WORK/memory-settings\""
   echo "exec python3 \"$SOURCE_ROOT/tests/fake_ollama.py\" $MODEL_PORT test-chat"
 } > "$WORK/bin/ollama"
 chmod +x "$WORK/bin/ollama"
@@ -51,6 +52,7 @@ app="$(make_app default "")"
 "$app/privatellm" start-ollama >/dev/null
 expect "default is the project's models folder" "$(cat "$WORK/recorded")" "$app/models"
 expect "the folder is created" "$(test -d "$app/models" && echo yes)" "yes"
+expect "memory-saving settings are on" "$(cat "$WORK/memory-settings")" "1 q8_0"
 expect "status says where the model is" "$("$app/privatellm" status | grep -c "stored in $app/models")" "1"
 "$app/privatellm" stop >/dev/null
 

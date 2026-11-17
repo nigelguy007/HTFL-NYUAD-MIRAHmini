@@ -272,12 +272,32 @@ There is no "forgot password" link, because the assistant cannot send email.
 | --- | --- |
 | `./privatellm start` / `stop` / `restart` | Run or stop the assistant |
 | `./privatellm status` | Is it running, and at what address |
+| `./privatellm doctor` | Which models are installed and loaded, and how much memory is free |
+| `./privatellm pull` | Download the chat and search models named in `settings.env` |
 | `./privatellm sync` | Refresh documents |
 | `./privatellm logs` | Watch the logs |
 | `./privatellm access` / `contributor` / `library` / `export-user` / `delete-user` / `audit` / `training` | See the sections above |
 
 The assistant stops when the Mac restarts or sleeps. Run `./privatellm start`
 again, and set the Mac not to sleep (System Settings, Energy).
+
+`start` loads both models into memory before the chat opens, so the first
+question does not wait for the model to be read from the drive. It warns if a
+model is missing (the chat would say "Model not found") or if memory is short.
+
+## If answers are slow or the Mac freezes
+
+Ollama is set to use as little memory as it can: flash attention and an 8-bit
+conversation cache (`OLLAMA_FLASH_ATTENTION`, `OLLAMA_KV_CACHE_TYPE` in
+`settings.env` override them). Run `./privatellm doctor` while a question is
+being answered. If the model's PROCESSOR column shows part CPU, it does not fit
+in the memory the Mac's graphics chip can use, and answers are several times
+slower. Then, one step at a time, followed by `./privatellm restart`:
+
+1. Quit Chrome and other large apps; keep only the MIRAH tab open.
+2. `PARALLEL_CHATS=1`: one answer at a time, others wait their turn.
+3. `CONTEXT_LENGTH=4096`: answers draw on fewer document excerpts.
+4. A smaller `CHAT_MODEL`, then `./privatellm pull` and `./privatellm configure`.
 
 ## Changing things
 
@@ -287,7 +307,7 @@ again, and set the Mac not to sleep (System Settings, Energy).
   the assistant completely, stop it and delete this folder. Ollama also leaves
   a small `~/.ollama` folder on the Mac (an identity key, a few KB).
 - **Model, port, context size:** `settings.env`, then `./privatellm restart`.
-  After changing `CHAT_MODEL`, run `ollama pull <model>` and
+  After changing `CHAT_MODEL`, run `./privatellm pull` and
   `./privatellm configure`.
 - **Privacy and search settings:** `config/openwebui.env`. These override the
   admin screens on every start, so a setting changed in the browser reverts on
