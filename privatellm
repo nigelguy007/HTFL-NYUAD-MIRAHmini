@@ -15,8 +15,6 @@ START_TIMEOUT_SECONDS=180
 STOP_TIMEOUT_SECONDS=30
 # Loading a model of several GB from an external drive can take a few minutes.
 WARM_UP_TIMEOUT_SECONDS=300
-# Below this much free memory, macOS starts swapping and the Mac can freeze.
-LOW_MEMORY_PERCENT=25
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -135,31 +133,43 @@ warm_up() {
     || echo "Note: could not preload $EMBED_MODEL. See $LOG_DIR/ollama.log."
 }
 
-# Percentage of memory macOS reports as free (the same figure as Activity
-# Monitor's memory pressure). Prints nothing on other systems.
+# Percentage of memory macOS reports as free. Prints nothing on other systems.
 free_memory_percent() {
   sysctl -n kern.memorystatus_level 2>/dev/null || true
 }
 
-# The programs using the most memory, helpers added together (Chrome runs as many).
+# The memory-pressure colour Activity Monitor shows: 1 green, 2 yellow, 4 red.
+# Free memory alone misleads: with the model loaded it is low by design.
+memory_pressure_level() {
+  sysctl -n kern.memorystatus_vm_pressure_level 2>/dev/null || true
+}
+
+# The other programs using the most memory, helpers added together (Chrome runs
+# as many). MIRAH's own parts are left out: stopping them stops MIRAH. The
+# model itself does not show here, as its memory belongs to the graphics chip.
 biggest_memory_users() {
   ps -axo rss=,ucomm= 2>/dev/null \
     | awk '{ kb = $1; $1 = ""; sub(/^ +/, ""); total[$0] += kb }
            END { for (name in total) printf "%d %s\n", total[name] / 1024, name }' \
+    | grep -vE ' (ollama|llama-server|python3[.0-9]*|open-webui|uvicorn)$' \
     | sort -rn | head -5 | awk '{ size = $1; $1 = ""; printf "    %6d MB %s\n", size, $0 }' || true
 }
 
-# warn_if_low_memory [always]: warns when the Mac is short of memory.
+# warn_if_low_memory [always]: warns when macOS reports memory pressure.
 warn_if_low_memory() {
-  local free
+  local level free
+  level="$(memory_pressure_level)"
   free="$(free_memory_percent)"
-  [[ "$free" =~ ^[0-9]+$ ]] || return 0
-  if (( free < LOW_MEMORY_PERCENT )); then
-    echo "WARNING: only $free% of memory is free. The Mac may freeze while MIRAH answers."
-    echo "  Close other apps, Chrome tabs especially. Using the most memory now:"
+  [[ "$level" =~ ^[0-9]+$ ]] || return 0
+  if (( level >= 2 )); then
+    local colour=yellow
+    (( level >= 4 )) && colour=red
+    echo "WARNING: the Mac is short of memory (pressure $colour, $free% free)."
+    echo "  It may freeze while MIRAH answers. Quit these, Chrome especially:"
     biggest_memory_users
   elif [[ "${1:-}" == "always" ]]; then
-    echo "Memory free: $free%. Using the most memory now:"
+    echo "Memory pressure: normal ($free% free; the loaded model accounts for most of the rest)."
+    echo "Other programs using the most memory:"
     biggest_memory_users
   fi
 }
