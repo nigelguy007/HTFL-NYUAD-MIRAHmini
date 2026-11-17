@@ -219,3 +219,21 @@ div:has(> #sidebar)::after {
 .dark #response-content-container > div.items-start.rounded-2xl > div.break-words {
   color: var(--color-gray-100);
 }
+
+/* --- Partner logos on the sign-in page: Hack the Future Lab and
+   The Disruptive AI Enabler, top right, above the photograph. -------------- */
+#auth-container::after {
+  content: "";
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  z-index: 40;
+  width: clamp(220px, 26vw, 380px);
+  aspect-ratio: 1656 / 300;
+  background: url("/static/brand/partner-logos.png") center / contain no-repeat;
+  pointer-events: none;
+}
+
+@media (max-width: 1023px) {
+  #auth-container::after { right: 1rem; width: min(64vw, 280px); }
+}

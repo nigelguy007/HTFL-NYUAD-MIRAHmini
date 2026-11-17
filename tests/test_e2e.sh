@@ -186,6 +186,7 @@ check "brand logo is served"           cmp "$WORK/served-logo.png" "$APP/brandin
 check "brand colours are served"       grep -qi "161a24" <(curl -fsS "$BASE/static/custom.css")
 check "sign-in asks for a UserID"     grep -q "UserID" <(curl -fsS "$BASE/static/loader.js")
 check "wordmark typeface is served"    curl -fsS -o /dev/null "$BASE/static/brand/Michroma-Regular.ttf"
+check "partner logos are served"     curl -fsS -o /dev/null "$BASE/static/brand/partner-logos.png"
 check "background photos are served"   bash -c "curl -fsS -o /dev/null '$BASE/static/brand/gateway.webp' && curl -fsS -o /dev/null '$BASE/static/brand/coast.webp'"
 check "brand name is shown exactly"    test "$(curl -fsS "$BASE/api/config" | field name)" = "MIRAH | The Oracle"
 mv "$APP/branding" "$APP/branding-off"
