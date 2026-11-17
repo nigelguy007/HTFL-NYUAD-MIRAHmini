@@ -46,7 +46,28 @@ When the message includes context taken from the team's documents:
 
 For totals, counts or averages across a spreadsheet, say that you only see part of the rows and cannot calculate reliably.
 
-For general questions that are not about the team's documents, answer normally and say the answer is from general knowledge."""
+For general questions that are not about the team's documents, answer normally and say the answer is from general knowledge.
+
+Rules you must always keep:
+- Label anything speculative, such as a possible future, as speculation.
+- Never profile, diagnose or rank people, and never guess at anyone's health, beliefs, background or other sensitive traits.
+- You cannot publish, send or act on anyone's behalf. Say so if asked.
+- You support facilitators and the Lab lead. You do not replace their interpretation."""
+
+# The Lab's three stages (docs/expectations/SCOPE.md, section 2), each offered
+# as its own version of the assistant: id suffix, name suffix, extra instructions.
+STAGES = [
+    ("inspire", "Inspire",
+     "This is the INSPIRE stage. Surface relevant provocations, methods and perspectives from the documents, "
+     "with their sources. Offer contrasting viewpoints rather than one answer."),
+    ("imagine", "Imagine",
+     "This is the IMAGINE stage. Ask reflective and critical questions before giving answers. Link ideas across "
+     "sessions and contributors, name recurring patterns and tensions, and sketch alternative futures, "
+     "always labelled as speculation."),
+    ("activate", "Activate",
+     "This is the ACTIVATE stage. Turn the idea the person chooses into one structured next step: an action, "
+     "a prototype outline, a recommendation, a collaboration or a question to investigate, grounded in the documents."),
+]
 
 
 class ApiError(Exception):
@@ -172,11 +193,18 @@ def thinking_params() -> dict[str, Any]:
     return {"think": False if setting == "false" else setting}
 
 
-def ensure_assistant(api: Api, knowledge_bases: list[dict[str, Any]], chat_model: str) -> None:
+def ensure_assistant(
+    api: Api,
+    knowledge_bases: list[dict[str, Any]],
+    chat_model: str,
+    model_id: str = ASSISTANT_ID,
+    name: str = ASSISTANT_NAME,
+    extra_prompt: str = "",
+) -> None:
     share_base_model(api, chat_model)
     form = {
-        "id": ASSISTANT_ID,
-        "name": ASSISTANT_NAME,
+        "id": model_id,
+        "name": name,
         "base_model_id": chat_model,
         "meta": {
             "description": "Answers from the team's documents. Runs on this computer only.",
@@ -190,14 +218,14 @@ def ensure_assistant(api: Api, knowledge_bases: list[dict[str, Any]], chat_model
                 for knowledge in knowledge_bases
             ],
         },
-        "params": {"system": SYSTEM_PROMPT, "function_calling": "legacy", **thinking_params()},
+        "params": {"system": SYSTEM_PROMPT + extra_prompt, "function_calling": "legacy", **thinking_params()},
         "access_grants": EVERYONE_CAN_READ,
         "is_active": True,
     }
     if save_model(api, form):
-        print(f"Created the '{ASSISTANT_NAME}' model on top of {chat_model}.")
+        print(f"Created the '{name}' model on top of {chat_model}.")
     else:
-        print(f"Updated the '{ASSISTANT_NAME}' model (now on {chat_model}).")
+        print(f"Updated the '{name}' model (now on {chat_model}).")
 
 
 def ensure_api_key(api: Api) -> None:
@@ -224,6 +252,15 @@ def main() -> None:
     uploads = ensure_knowledge_base(api, KNOWLEDGE_ID_FILE, KNOWLEDGE_NAME, KNOWLEDGE_DESCRIPTION)
     synced = ensure_knowledge_base(api, SYNC_KNOWLEDGE_ID_FILE, SYNC_KNOWLEDGE_NAME, SYNC_KNOWLEDGE_DESCRIPTION)
     ensure_assistant(api, [uploads, synced], chat_model)
+    for suffix, label, instructions in STAGES:
+        ensure_assistant(
+            api,
+            [uploads, synced],
+            chat_model,
+            model_id=f"{ASSISTANT_ID}-{suffix}",
+            name=f"{ASSISTANT_NAME} · {label}",
+            extra_prompt="\n\n" + instructions,
+        )
     ensure_api_key(api)
 
     print(f"\nDone. Open the address shown by ./privatellm status, log in, and pick '{ASSISTANT_NAME}'.")

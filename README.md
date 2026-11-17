@@ -26,8 +26,10 @@ This folder adds the setup, the privacy settings and the wiring between them.
   well; analysis across many documents does not.
 - **Spreadsheets are searched, not calculated.** "What did Acme order?" works.
   "What is the total of column C?" does not: the model only sees a few rows.
-- **Speed depends on memory.** One person at a time gets a fast answer; several
-  at once queue up.
+- **Speed depends on memory.** A few people get answers at the same moment:
+  2 on a 16 GB machine, 4 from 32 GB, 8 from 96 GB (`PARALLEL_CHATS` in
+  `settings.env`). They share the machine, so each answer is slower while
+  others are running. Anyone beyond that number waits in a queue.
 
 | Memory | Model chosen | Maker | Expectation |
 | --- | --- | --- | --- |
@@ -117,7 +119,11 @@ command again. Two limits:
 
 ## Add people
 
-1. They open the address from `./privatellm status` and sign up.
+1. They open the address from `./privatellm status` and sign up. For data
+   protection they should not use their real name or email: they invent a
+   username and use `username@mirah.local` as the email. The sign-in page tells
+   them this. It is a request, not a block: nothing stops someone typing a real
+   name. Keep no list linking usernames to people unless you need one.
 2. You approve them: your avatar, **Admin Panel**, **Users**, change `pending` to `user`.
 
 The address only works on your office network. For access from elsewhere, put
@@ -186,7 +192,10 @@ again, and set the Mac not to sleep (System Settings, Energy).
 These settings stop the software from calling out. They are not a firewall. If
 you need proof for an audit, also block outbound traffic from the Mac.
 
-Admins can read other people's chats. Tell your users.
+Admins cannot open other people's chats from the website
+(`ENABLE_ADMIN_CHAT_ACCESS=false`). Anyone with access to the host computer's
+files can still read the database in `data/`, so this protects against
+curiosity, not against the person who runs the machine. Tell your users.
 
 ## Tested and not tested
 

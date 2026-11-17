@@ -49,6 +49,19 @@ pick_model() {
 }
 
 # Ollama for Mac ships as an app; the command-line program is inside it.
+# How many people the model answers at the same moment, for $1 GB of memory.
+# Each one needs its own working memory and they share the machine's speed, so
+# more is not free. Others who ask while all places are busy wait in a queue.
+# The full plan's 20 at once needs the university's GPU servers.
+pick_parallel() {
+  local gb="$1"
+  if   (( gb >= 96 )); then echo 8
+  elif (( gb >= 32 )); then echo 4
+  elif (( gb >= 16 )); then echo 2
+  else                      echo 1
+  fi
+}
+
 install_ollama() {
   [[ -x "$BIN_DIR/ollama" ]] && return
   if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -89,7 +102,7 @@ install_tools() {
 }
 
 write_settings() {
-  local chat_model="$1" context="$2" think="$3"
+  local chat_model="$1" context="$2" think="$3" parallel="$4"
   if [[ -f "$SETTINGS" ]]; then
     say "Keeping existing $SETTINGS"
     return
@@ -103,6 +116,8 @@ CONTEXT_LENGTH=$context
 # The model's reasoning step before it answers: false, low, medium, high, or
 # none if the model has no such step. After changing, run ./privatellm configure.
 MODEL_THINK=$think
+# How many people get an answer at the same moment; the rest queue.
+PARALLEL_CHATS=$parallel
 # Where the model files (5 to 25 GB) are kept. Default: the models folder next
 # to this file, so they sit on whichever drive this project is on.
 # MODELS_DIR=/Volumes/YourDrive/models
@@ -139,7 +154,7 @@ main() {
     echo "    Warning: under 16 GB only a small model fits. Expect weak answers."
   fi
   install_tools
-  write_settings "$chat_model" "$context" "$think"
+  write_settings "$chat_model" "$context" "$think" "$(pick_parallel "$gb")"
   pull_models
   say "Setup finished. Next:"
   echo "    ./privatellm start       # start the assistant"

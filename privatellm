@@ -85,6 +85,7 @@ start_ollama() {
   OLLAMA_CONTEXT_LENGTH="$CONTEXT_LENGTH" \
   OLLAMA_KEEP_ALIVE=-1 \
   OLLAMA_MAX_LOADED_MODELS=2 \
+  OLLAMA_NUM_PARALLEL="${PARALLEL_CHATS:-1}" \
     nohup ollama serve >"$LOG_DIR/ollama.log" 2>&1 &
   echo $! >"$RUN_DIR/ollama.pid"
   wait_for "$OLLAMA_URL/api/version" "Ollama" ollama

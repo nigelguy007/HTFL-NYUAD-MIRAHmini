@@ -42,6 +42,11 @@ case "$EMBED_MODEL_DEFAULT" in
   *) echo "ok   search model is $EMBED_MODEL_DEFAULT" ;;
 esac
 
+for pair in "8 1" "16 2" "31 2" "32 4" "95 4" "96 8"; do
+  set -- $pair
+  if [[ "$(pick_parallel "$1")" == "$2" ]]; then echo "ok   $1 GB answers $2 at once"; else echo "FAIL $1 GB parallel: got $(pick_parallel "$1"), want $2"; failures=$(( failures + 1 )); fi
+done
+
 gb="$(memory_gb)"
 if [[ "$gb" =~ ^[0-9]+$ ]] && (( gb > 0 )); then
   echo "ok   memory_gb reports ${gb} GB on this machine"

@@ -60,7 +60,7 @@ model_prompt() {
 }
 
 BASE="http://127.0.0.1:$WEB_PORT"
-COLLEAGUE_EMAIL="colleague@example.test"
+COLLEAGUE_EMAIL="desert-fox@mirah.local"   # an invented sign-up, as users are asked to make
 COLLEAGUE_PASSWORD="Another-passw0rd-456!"
 
 post_json() { curl -sS -X POST "$BASE$1" -H "Content-Type: application/json" ${3:+-H "Authorization: Bearer $3"} -d "$2"; }
@@ -193,6 +193,9 @@ check "old password no longer works"   test "$(login "$COLLEAGUE_EMAIL" "$COLLEA
 COLLEAGUE_PASSWORD="Brand-new-pass-789"
 RESET_EMAIL="nobody@example.test" RESET_PASSWORD="Whatever-pass-1" "$APP/privatellm" reset-password >"$WORK/reset2.log" 2>&1 || true
 check "unknown email changes nothing"  grep -q "No account uses" "$WORK/reset2.log"
+curl -fsS -H "Authorization: Bearer $(login "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" "$BASE/api/models" > "$WORK/models.json"
+check "the three stages are offered"   bash -c "grep -q 'MIRAH · Inspire' '$WORK/models.json' && grep -q 'MIRAH · Imagine' '$WORK/models.json' && grep -q 'MIRAH · Activate' '$WORK/models.json'"
+check "admin cannot open others' chats" test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(login "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" "$BASE/api/v1/chats/list/user/$(login "$COLLEAGUE_EMAIL" "$COLLEAGUE_PASSWORD" id)")" = "401"
 check "assistant is named MIRAH"       grep -q '"name":"MIRAH"' <(curl -fsS -H "Authorization: Bearer $(login "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" "$BASE/api/models")
 
 # --- Skills: copied from a library, switched on per chat -----------------------

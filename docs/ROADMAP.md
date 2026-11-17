@@ -19,7 +19,7 @@ Status: **Done**, **Partly**, or **Not yet**.
 | Connect sessions, contributors and artefacts | No: answers from a handful of passages at a time | Not yet |
 | Surface recurring patterns and tensions | No: needs reading across the whole library | Not yet |
 | Reflective and critical questioning | The `grilling`, `pre-mortem` and similar skills, switched on per chat | Partly: skills, not a guided mode |
-| INSPIRE, IMAGINE, ACTIVATE guided journey | None: mini is a plain chat | Not yet |
+| INSPIRE, IMAGINE, ACTIVATE guided journey | Three versions of MIRAH to pick from in the model menu, each with its stage's instructions | Partly: the person picks the stage; nothing guides them from one to the next |
 | LLM modes (facilitation, critical inquiry, ...) | Skills cover some of this | Partly |
 
 ## What it must not do (SCOPE §2)
@@ -29,7 +29,7 @@ Status: **Done**, **Partly**, or **Not yet**.
 | No autonomous external actions | It has no tools to act with; web search is off | Done |
 | No adding its own output to the trusted library | The library only changes when a person uploads or syncs | Done |
 | No revealing material above a user's access level | Every approved user can read both knowledge bases | Not yet: no access levels |
-| No profiling, diagnosing or ranking people | Not instructed either way | Not yet |
+| No profiling, diagnosing or ranking people | Instructed never to; also to label speculation and not to act for anyone | Partly: instruction only |
 
 ## Content (SCOPE §3)
 
@@ -48,8 +48,8 @@ Status: **Done**, **Partly**, or **Not yet**.
 | No Chinese-origin models unless Security permits | None are used; a test fails if one is chosen | Done |
 | App and GPU servers have no internet | Outside connections are switched off in settings, not blocked by a firewall | Partly |
 | External services off until contracts and Legal approval | OpenAI, web search and the rest are off | Done |
-| 20 people at once; first words in under 4 s, full answer in under 18 s | One person at a time; about 15 to 25 s per document answer on a 16 GB Mac | Not yet |
-| NYU single sign-on with MFA | Email and password, admin approves each account | Not yet |
+| 20 people at once; first words in under 4 s, full answer in under 18 s | 2 at once on 16 GB, 4 from 32 GB, 8 from 96 GB; the rest queue. Not measured with a real model | Partly: 20 at once needs GPU servers |
+| NYU single sign-on with MFA | Invented username and password, admin approves each account; admin cannot open others' chats from the website | Not yet |
 | PostgreSQL + pgvector, object storage, backups | One SQLite file and a local index; no backups | Not yet |
 | Library learning (approved items searchable) | Sync and upload add items; removal deletes them | Partly: no approval |
 | Adapter training on consented input | None | Not yet |
