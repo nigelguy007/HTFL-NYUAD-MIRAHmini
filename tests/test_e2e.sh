@@ -153,6 +153,7 @@ check "model is told not to think first" python3 -c "
 import json, sys
 chats = [r['body'] for r in json.load(open(sys.argv[1])) if r['path'] == '/api/chat']
 sys.exit(0 if chats and all(c.get('think') is False for c in chats) else 1)" "$WORK/model-requests.json"
+check "re-index runs"                  "$APP/privatellm" reindex
 check "restart works"                  "$APP/privatellm" restart
 check "still answers after restart"    finds 'When does the Zanzibar office open?' "handbook.md"
 

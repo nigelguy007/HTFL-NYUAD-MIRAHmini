@@ -159,6 +159,19 @@ def share_base_model(api: Api, chat_model: str) -> None:
     )
 
 
+def thinking_params() -> dict[str, Any]:
+    """How much the model reasons silently before it answers (MODEL_THINK).
+
+    Reasoning can double the wait and adds little when the answer is in the
+    documents, so it is off where the model allows. "none" sends nothing, for
+    models with no such step; gpt-oss cannot switch it off, only lower it.
+    """
+    setting = (os.environ.get("MODEL_THINK") or "false").strip().lower()
+    if setting == "none":
+        return {}
+    return {"think": False if setting == "false" else setting}
+
+
 def ensure_assistant(api: Api, knowledge_bases: list[dict[str, Any]], chat_model: str) -> None:
     share_base_model(api, chat_model)
     form = {
@@ -177,9 +190,7 @@ def ensure_assistant(api: Api, knowledge_bases: list[dict[str, Any]], chat_model
                 for knowledge in knowledge_bases
             ],
         },
-        # think=False: answer directly. The model's silent reasoning step can
-        # double the wait and adds little when the answer is in the documents.
-        "params": {"system": SYSTEM_PROMPT, "function_calling": "legacy", "think": False},
+        "params": {"system": SYSTEM_PROMPT, "function_calling": "legacy", **thinking_params()},
         "access_grants": EVERYONE_CAN_READ,
         "is_active": True,
     }

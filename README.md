@@ -1,4 +1,8 @@
-# Private assistant
+# MIRAH mini
+
+A small, working version of MIRAH for Hack the Future Lab, NYU Abu Dhabi. The
+full plan it is growing towards is in [docs/expectations](docs/expectations),
+and [docs/ROADMAP.md](docs/ROADMAP.md) shows how far this version has got.
 
 A ChatGPT-style assistant that runs on one Apple Silicon Mac and answers from
 your own documents. Nothing is sent to an outside service: the model, the
@@ -25,12 +29,17 @@ This folder adds the setup, the privacy settings and the wiring between them.
 - **Speed depends on memory.** One person at a time gets a fast answer; several
   at once queue up.
 
-| Mac memory | Model chosen | Expectation |
-| --- | --- | --- |
-| under 16 GB | `qwen3.5:4b` | Weak. Not recommended. |
-| 16 to 31 GB | `qwen3.5:9b` | Usable for document lookups |
-| 32 to 47 GB | `qwen3.5:27b` | Good |
-| 48 GB or more | `qwen3.5:35b` | Best this setup offers |
+| Memory | Model chosen | Maker | Expectation |
+| --- | --- | --- | --- |
+| under 16 GB | `llama3.2:3b` | Meta | Weak. Not recommended. |
+| 16 to 23 GB | `gemma4:12b` | Google | Usable for document lookups |
+| 24 to 63 GB | `gpt-oss:20b` | OpenAI | Good |
+| 64 to 95 GB | `llama3.3:70b` | Meta | The plan's fallback model |
+| 96 GB or more | `gpt-oss:120b` | OpenAI | The plan's main model |
+
+No Chinese-origin model is used at any size, for the chat model or the search
+model (`embeddinggemma`, Google), because the NYUAD plan rules them out unless
+its Security team permits them.
 
 ## Set up
 

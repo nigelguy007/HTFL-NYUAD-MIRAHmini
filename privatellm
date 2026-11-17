@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the private assistant: Ollama (the model) and Open WebUI (the chat site).
-#   ./privatellm start | stop | restart | status | configure | sync | skills | reset-password | logs
+#   ./privatellm start | stop | restart | status | configure | sync | skills | reset-password | reindex | logs
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -246,6 +246,16 @@ run_reset_password() {
   "$python" "$ROOT/scripts/reset_password.py" "$DATA_DIR/webui.db"
 }
 
+# Rebuilds the search index for every document. Needed after EMBED_MODEL
+# changes, because each search model stores documents in its own format.
+run_reindex() {
+  configured || fail "Run ./privatellm configure first."
+  echo "Re-indexing every document. This can take a while for a large library..."
+  curl -fsS -X POST -H "Authorization: Bearer $(cat "$RUN_DIR/api-key")" \
+    "http://127.0.0.1:$PORT/api/v1/knowledge/reindex" >/dev/null || fail "Re-index failed. See $LOG_DIR/webui.log."
+  echo "Done."
+}
+
 run_configure() {
   local was_configured=no
   configured && was_configured=yes
@@ -271,9 +281,10 @@ main() {
     configure)    run_configure "$@" ;;
     sync)         run_sync "$@" ;;
     reset-password) run_reset_password ;;
+    reindex)      run_reindex ;;
     skills)       WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/import_skills.py" ;;
     logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
-    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, reset-password, logs." ;;
+    *)            fail "Unknown command '$command'. Use: start, stop, restart, status, configure, sync, skills, reset-password, reindex, logs." ;;
   esac
 }
 

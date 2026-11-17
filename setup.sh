@@ -13,7 +13,8 @@ UV_INSTALLER_URL="https://astral.sh/uv/install.sh"
 # The versions tests/test_e2e.sh was run against. Newer ones may rename settings.
 OPEN_WEBUI_VERSION="${OPEN_WEBUI_VERSION:-0.13.3}"
 OIKB_VERSION="${OIKB_VERSION:-0.6.0}"
-EMBED_MODEL_DEFAULT="qwen3-embedding:0.6b"
+# The search model (Google). Changing it later means running ./privatellm reindex.
+EMBED_MODEL_DEFAULT="embeddinggemma"
 
 say()  { printf '\n==> %s\n' "$*"; }
 fail() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
@@ -26,15 +27,22 @@ memory_gb() {
   esac
 }
 
-# Prints "<chat model> <context length>" for a machine with $1 GB of memory.
-# The model must leave room for macOS, the embedding model and the context.
+# Prints "<chat model> <context length> <thinking>" for a machine with $1 GB of
+# memory. Only models from US and European makers are used: NYUAD's plan rules
+# out Chinese-origin models unless its Security team permits them.
+#   gpt-oss (OpenAI) is the plan's main model, llama3.3 (Meta) its fallback;
+#   gemma4 (Google) and llama3.2 (Meta) cover machines too small for either.
+# The model must leave room for the system, the search model and the context.
+# Thinking: "low" = gpt-oss's shortest reasoning (it cannot be switched off),
+# "false" = off, "none" = the model has no such step.
 pick_model() {
   local gb="$1"
-  if   (( gb >= 48 )); then echo "qwen3.5:35b 32768"
-  elif (( gb >= 32 )); then echo "qwen3.5:27b 16384"
-  elif (( gb >= 24 )); then echo "qwen3.5:9b 16384"
-  elif (( gb >= 16 )); then echo "qwen3.5:9b 8192"
-  else                      echo "qwen3.5:4b 8192"
+  if   (( gb >= 96 )); then echo "gpt-oss:120b 32768 low"
+  elif (( gb >= 64 )); then echo "llama3.3:70b 16384 none"
+  elif (( gb >= 32 )); then echo "gpt-oss:20b 16384 low"
+  elif (( gb >= 24 )); then echo "gpt-oss:20b 8192 low"
+  elif (( gb >= 16 )); then echo "gemma4:12b 8192 false"
+  else                      echo "llama3.2:3b 8192 none"
   fi
 }
 
@@ -79,7 +87,7 @@ install_tools() {
 }
 
 write_settings() {
-  local chat_model="$1" context="$2"
+  local chat_model="$1" context="$2" think="$3"
   if [[ -f "$SETTINGS" ]]; then
     say "Keeping existing $SETTINGS"
     return
@@ -90,6 +98,9 @@ write_settings() {
 CHAT_MODEL=$chat_model
 EMBED_MODEL=$EMBED_MODEL_DEFAULT
 CONTEXT_LENGTH=$context
+# The model's reasoning step before it answers: false, low, medium, high, or
+# none if the model has no such step. After changing, run ./privatellm configure.
+MODEL_THINK=$think
 # Where the model files (5 to 25 GB) are kept. Default: the models folder next
 # to this file, so they sit on whichever drive this project is on.
 # MODELS_DIR=/Volumes/YourDrive/models
@@ -118,15 +129,15 @@ main() {
   if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" != "arm64" ]]; then
     fail "This setup is for Apple Silicon Macs. Intel Macs are too slow for this."
   fi
-  local gb chat_model context
+  local gb chat_model context think
   gb="$(memory_gb)"
-  read -r chat_model context <<<"$(pick_model "$gb")"
+  read -r chat_model context think <<<"$(pick_model "$gb")"
   say "This machine has ${gb} GB of memory -> ${chat_model}, context ${context} tokens"
   if (( gb < 16 )); then
     echo "    Warning: under 16 GB only a small model fits. Expect weak answers."
   fi
   install_tools
-  write_settings "$chat_model" "$context"
+  write_settings "$chat_model" "$context" "$think"
   pull_models
   say "Setup finished. Next:"
   echo "    ./privatellm start       # start the assistant"
