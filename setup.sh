@@ -33,14 +33,16 @@ memory_gb() {
 #   gpt-oss (OpenAI) is the plan's main model, llama3.3 (Meta) its fallback;
 #   gemma4 (Google) and llama3.2 (Meta) cover machines too small for either.
 # The model must leave room for the system, the search model and the context.
-# Thinking: "low" = gpt-oss's shortest reasoning (it cannot be switched off),
-# "false" = off, "none" = the model has no such step.
+# Thinking: gpt-oss always reasons before answering and offers low, medium or
+# high; medium is used here. Each step up gives more considered answers and a
+# longer wait, so set MODEL_THINK=low in settings.env if speed matters more.
+# "false" = reasoning off, "none" = the model has no such step.
 pick_model() {
   local gb="$1"
-  if   (( gb >= 96 )); then echo "gpt-oss:120b 32768 low"
+  if   (( gb >= 96 )); then echo "gpt-oss:120b 32768 medium"
   elif (( gb >= 64 )); then echo "llama3.3:70b 16384 none"
-  elif (( gb >= 32 )); then echo "gpt-oss:20b 16384 low"
-  elif (( gb >= 24 )); then echo "gpt-oss:20b 8192 low"
+  elif (( gb >= 32 )); then echo "gpt-oss:20b 16384 medium"
+  elif (( gb >= 24 )); then echo "gpt-oss:20b 8192 medium"
   elif (( gb >= 16 )); then echo "gemma4:12b 8192 false"
   else                      echo "llama3.2:3b 8192 none"
   fi
