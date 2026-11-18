@@ -405,7 +405,7 @@ main() {
     sync)         run_sync "$@" ;;
     reset-password) run_reset_password ;;
     reindex)      run_reindex ;;
-    skills)       WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/import_skills.py" ;;
+    skills)       WEBUI_URL="http://127.0.0.1:$PORT" uv run --python 3.12 "$ROOT/scripts/import_skills.py" "$@" ;;
     logs)         tail -n 50 -f "$LOG_DIR/webui.log" "$LOG_DIR/ollama.log" ;;
     access|contributor|library|export-user|delete-user|audit|training) run_govern "$command" "$@" ;;
     *)            fail "Unknown command '$command'. Use: start, stop, restart, status, doctor, pull, configure, sync, skills, reset-password, reindex, logs, access, contributor, library, export-user, delete-user, audit, training." ;;

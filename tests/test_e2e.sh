@@ -253,6 +253,19 @@ curl -s -o "$WORK/no-skill-chat.json" -X POST "$BASE/api/chat/completions" \
   -d '{"model":"assistant","stream":false,"messages":[{"role":"user","content":"Hello"}]}'
 check "it stays out of other chats"    bash -c "! grep -q 'green heron' '$WORK/no-skill-chat.json'"
 
+# A whole repository: every SKILL.md, two folders with the same name kept apart.
+mkdir -p "$WORK/skill-repo/one/brief" "$WORK/skill-repo/two/brief" "$WORK/skill-repo/three/memo"
+printf -- '---\nname: brief-one\ndescription: First.\n---\n\nWrite a brief.\n' > "$WORK/skill-repo/one/brief/SKILL.md"
+printf -- '---\nname: brief-two\ndescription: Second.\n---\n\nWrite a shorter brief.\n' > "$WORK/skill-repo/two/brief/SKILL.md"
+python3 -c "print('word ' * 1200)" > "$WORK/skill-repo/three/memo/SKILL.md"
+git -C "$WORK/skill-repo" init -q && git -C "$WORK/skill-repo" add -A \
+  && git -C "$WORK/skill-repo" -c user.name=t -c user.email=t@t commit -qm skills
+"$APP/privatellm" skills --repo "$WORK/skill-repo" >"$WORK/skills-repo.log" 2>&1 || true
+check "a repository's skills are found" grep -q "Found 3 skill(s)" "$WORK/skills-repo.log"
+check "same-named skills both added"   test "$(grep -c "brief: added" "$WORK/skills-repo.log")" = "2"
+check "long ones in it are skipped"    grep -q "memo: skipped (1200 words" "$WORK/skills-repo.log"
+check "the run is summarised"          grep -q "3 skill(s) processed: 2 added, 1 skipped" "$WORK/skills-repo.log"
+
 # Signing in is rate-limited, so each person signs in once here and the session is reused.
 COLLEAGUE_TOKEN="$(colleague_token)"
 # --- Side routes to the model, which would skip the consent gate, are closed --------

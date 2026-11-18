@@ -109,7 +109,15 @@ In a chat, type `$` and pick a skill to switch it on for that conversation. It
 is not applied to other chats.
 
 To add more, put the skill's folder path in `skills/selected.txt` and run the
-command again. Two limits:
+command again. To copy in every skill from one GitHub repository instead:
+
+```bash
+./privatellm skills --repo https://github.com/<owner>/<repository>
+```
+
+It finds every `SKILL.md` in it, keeps two skills with the same folder name
+apart, skips the over-long ones and prints a count at the end. A private
+repository needs the Mac to be signed in to GitHub for `git clone`. Two limits:
 
 - Only skills that are plain instructions do anything here. Most skills in the
   library were written for Claude Code and tell it to run commands, search the
